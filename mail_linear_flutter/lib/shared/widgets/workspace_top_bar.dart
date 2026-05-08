@@ -15,8 +15,11 @@ class WorkspaceTopBar extends StatelessWidget {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final isCompact = constraints.maxWidth < 680;
-        final isTight = constraints.maxWidth < 540;
+        final width = constraints.maxWidth;
+        final isTight = width < 540;
+        final showLifecycle = width >= 700;
+        final showMode = width >= 820;
+        final showServer = width >= 1040;
 
         return SizedBox(
           height: 66,
@@ -33,12 +36,13 @@ class WorkspaceTopBar extends StatelessWidget {
                 child: _HeaderTools(
                   children: [
                     _TopAction(state: state),
-                    if (!isTight) LifecyclePill(state: state),
-                    if (!isCompact) _ModeSwitch(state: state),
-                    if (!isTight)
+                    if (showLifecycle) LifecyclePill(state: state),
+                    if (showMode) _ModeSwitch(state: state),
+                    if (showServer)
                       StatusPill(
                         label: _serverLabel(state.serverUrl),
                         icon: Icons.cloud_done_outlined,
+                        maxWidth: 150,
                       ),
                   ],
                 ),
@@ -102,7 +106,12 @@ class _TitleBlock extends StatelessWidget {
       mainAxisAlignment: MainAxisAlignment.center,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(_title, style: Theme.of(context).textTheme.headlineMedium),
+        Text(
+          _title,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: Theme.of(context).textTheme.headlineMedium,
+        ),
         const SizedBox(height: 3),
         Text(
           _subtitle,

@@ -8,15 +8,17 @@ class StatusPill extends StatelessWidget {
     required this.label,
     this.color = LinearColors.green,
     this.icon,
+    this.maxWidth,
   });
 
   final String label;
   final Color color;
   final IconData? icon;
+  final double? maxWidth;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    final content = Container(
       height: 34,
       padding: const EdgeInsets.symmetric(horizontal: 12),
       decoration: BoxDecoration(
@@ -29,9 +31,21 @@ class StatusPill extends StatelessWidget {
         children: [
           Icon(icon ?? Icons.circle, size: icon == null ? 8 : 16, color: color),
           const SizedBox(width: 8),
-          Text(label, style: AppText.label.copyWith(color: color)),
+          Flexible(
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: AppText.label.copyWith(color: color),
+            ),
+          ),
         ],
       ),
+    );
+    if (maxWidth == null) return content;
+    return ConstrainedBox(
+      constraints: BoxConstraints(maxWidth: maxWidth!),
+      child: content,
     );
   }
 }

@@ -18,6 +18,12 @@ Mail Linear Flutter 是一个 Windows 桌面邮箱管理工具，使用 Flutter 
 - ClawEmail 绑定、子邮箱同步和收件入口。
 - 本地 Rust sidecar 启动，不依赖远程中转服务保存账号数据。
 
+## 界面截图
+
+![Dashboard](docs/screenshots/dashboard.png)
+
+![Language Settings](docs/screenshots/settings-language-menu.png)
+
 ## Repository Layout
 
 - `mail_linear_flutter/` - Flutter 桌面应用。
