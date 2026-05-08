@@ -38,13 +38,14 @@ class _AccountsPageState extends State<AccountsPage> {
               children: [
                 _Toolbar(state: state, selectedCount: selected.length),
                 const SizedBox(height: 18),
-                _HeaderRow(),
+                _HeaderRow(state: state),
                 Expanded(
                   child: ListView.builder(
                     itemCount: state.accounts.length,
                     itemBuilder: (context, index) {
                       final account = state.accounts[index];
                       return AccountRow(
+                        state: state,
                         account: account,
                         active: account.id == state.selectedAccount?.id,
                         checked: selected.contains(account.id),
@@ -100,18 +101,18 @@ class _ClawAccountsPage extends StatelessWidget {
                 Row(
                   children: [
                     Text(
-                      'Claw 子邮箱',
+                      state.text.ui('Claw 子邮箱'),
                       style: Theme.of(context).textTheme.titleLarge,
                     ),
                     const Spacer(),
                     LinearButton(
-                      label: '同步',
+                      label: state.text.ui('同步'),
                       icon: Icons.sync_alt,
                       onPressed: state.refresh,
                     ),
                     const SizedBox(width: 10),
                     LinearButton(
-                      label: 'Claw 设置',
+                      label: state.text.clawSettings,
                       icon: Icons.hub_outlined,
                       primary: true,
                       onPressed: () => state.setPage(AppPage.claw),
@@ -119,16 +120,19 @@ class _ClawAccountsPage extends StatelessWidget {
                   ],
                 ),
                 const SizedBox(height: 8),
-                const Text(
-                  '当前显示 ClawEmail 子邮箱，不混用 Outlook 令牌账号。',
+                Text(
+                  state.text.ui('当前显示 ClawEmail 子邮箱，不混用 Outlook 令牌账号。'),
                   style: AppText.muted,
                 ),
                 const SizedBox(height: 20),
-                const _ClawHeaderRow(),
+                _ClawHeaderRow(state: state),
                 Expanded(
                   child: state.clawMailboxes.isEmpty
-                      ? const Center(
-                          child: Text('暂无 Claw 子邮箱', style: AppText.muted),
+                      ? Center(
+                          child: Text(
+                            state.text.ui('暂无 Claw 子邮箱'),
+                            style: AppText.muted,
+                          ),
                         )
                       : ListView.builder(
                           itemCount: state.clawMailboxes.length,
@@ -139,6 +143,7 @@ class _ClawAccountsPage extends StatelessWidget {
                                 selected != null &&
                                 state.clawMailboxEmail(selected) == email;
                             return _ClawMailboxRow(
+                              state: state,
                               email: email,
                               mailbox: mailbox,
                               active: active,
@@ -159,7 +164,9 @@ class _ClawAccountsPage extends StatelessWidget {
 }
 
 class _ClawHeaderRow extends StatelessWidget {
-  const _ClawHeaderRow();
+  const _ClawHeaderRow({required this.state});
+
+  final AppState state;
 
   @override
   Widget build(BuildContext context) {
@@ -169,14 +176,14 @@ class _ClawHeaderRow extends StatelessWidget {
       height: 1.25,
       fontWeight: FontWeight.w600,
     );
-    return const Padding(
-      padding: EdgeInsets.fromLTRB(16, 0, 8, 10),
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 0, 8, 10),
       child: Row(
         children: [
-          Expanded(child: Text('子邮箱', style: style)),
-          SizedBox(width: 120, child: Text('类型', style: style)),
-          SizedBox(width: 96, child: Text('状态', style: style)),
-          SizedBox(width: 64, child: Text('操作', style: style)),
+          Expanded(child: Text(state.text.ui('子邮箱'), style: style)),
+          SizedBox(width: 120, child: Text(state.text.ui('类型'), style: style)),
+          SizedBox(width: 96, child: Text(state.text.ui('状态'), style: style)),
+          SizedBox(width: 64, child: Text(state.text.ui('操作'), style: style)),
         ],
       ),
     );
@@ -185,12 +192,14 @@ class _ClawHeaderRow extends StatelessWidget {
 
 class _ClawMailboxRow extends StatelessWidget {
   const _ClawMailboxRow({
+    required this.state,
     required this.email,
     required this.mailbox,
     required this.active,
     required this.onTap,
   });
 
+  final AppState state;
   final String email;
   final Map<String, dynamic> mailbox;
   final bool active;
@@ -223,7 +232,7 @@ class _ClawMailboxRow extends StatelessWidget {
           children: [
             Expanded(
               child: Text(
-                email.isEmpty ? '未命名子邮箱' : email,
+                email.isEmpty ? state.text.ui('未命名子邮箱') : email,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: AppText.itemTitle,
@@ -233,7 +242,7 @@ class _ClawMailboxRow extends StatelessWidget {
             SizedBox(
               width: 96,
               child: StatusPill(
-                label: status == 'active' ? '可用' : status,
+                label: status == 'active' ? state.text.ui('可用') : status,
                 color: status == 'active'
                     ? LinearColors.green
                     : LinearColors.amber,
@@ -242,7 +251,7 @@ class _ClawMailboxRow extends StatelessWidget {
             SizedBox(
               width: 64,
               child: IconButton(
-                tooltip: '复制子邮箱',
+                tooltip: state.text.ui('复制子邮箱'),
                 onPressed: () => _copy(context, email),
                 icon: const Icon(Icons.copy, size: 18),
               ),
@@ -258,7 +267,7 @@ class _ClawMailboxRow extends StatelessWidget {
     if (!context.mounted) return;
     ScaffoldMessenger.of(
       context,
-    ).showSnackBar(const SnackBar(content: Text('Claw 子邮箱已复制')));
+    ).showSnackBar(SnackBar(content: Text(state.text.ui('Claw 子邮箱已复制'))));
   }
 }
 
@@ -279,9 +288,15 @@ class _ClawAccountRail extends StatelessWidget {
           ? Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('选择子邮箱', style: Theme.of(context).textTheme.titleLarge),
+                Text(
+                  state.text.ui('选择子邮箱'),
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
                 const SizedBox(height: 8),
-                const Text('点击左侧 Claw 子邮箱后查看状态。', style: AppText.muted),
+                Text(
+                  state.text.ui('点击左侧 Claw 子邮箱后查看状态。'),
+                  style: AppText.muted,
+                ),
               ],
             )
           : Column(
@@ -297,7 +312,7 @@ class _ClawAccountRail extends StatelessWidget {
                 ),
                 const SizedBox(height: 16),
                 Text(
-                  email.isEmpty ? '未命名子邮箱' : email,
+                  email.isEmpty ? state.text.ui('未命名子邮箱') : email,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   style: Theme.of(context).textTheme.titleLarge,
@@ -309,16 +324,16 @@ class _ClawAccountRail extends StatelessWidget {
                 ),
                 const SizedBox(height: 18),
                 _ClawInfoLine(
-                  label: '类型',
+                  label: state.text.ui('类型'),
                   value: mailbox['mailbox_type']?.toString() ?? 'Claw',
                 ),
                 _ClawInfoLine(
-                  label: '来源',
+                  label: state.text.ui('来源'),
                   value: mailbox['source']?.toString() ?? 'ClawEmail',
                 ),
                 const SizedBox(height: 18),
                 LinearButton(
-                  label: '查看邮件',
+                  label: state.text.ui('查看邮件'),
                   icon: Icons.mail_outline,
                   primary: true,
                   onPressed: () async {
@@ -328,13 +343,13 @@ class _ClawAccountRail extends StatelessWidget {
                 ),
                 const SizedBox(height: 10),
                 LinearButton(
-                  label: 'Claw 收件',
+                  label: state.text.clawFetch,
                   icon: Icons.sync,
                   onPressed: state.fetching ? null : state.fetchSelectedMail,
                 ),
                 const SizedBox(height: 10),
                 LinearButton(
-                  label: '复制子邮箱',
+                  label: state.text.ui('复制子邮箱'),
                   icon: Icons.copy,
                   onPressed: () =>
                       Clipboard.setData(ClipboardData(text: email)),
@@ -387,20 +402,20 @@ class _Toolbar extends StatelessWidget {
             Expanded(
               child: TextField(
                 onSubmitted: (_) => state.refresh(),
-                decoration: const InputDecoration(
-                  prefixIcon: Icon(Icons.search),
-                  hintText: '搜索邮箱、名称或 client id',
+                decoration: InputDecoration(
+                  prefixIcon: const Icon(Icons.search),
+                  hintText: state.text.ui('搜索邮箱、名称或 client id'),
                 ),
               ),
             ),
             const SizedBox(width: 12),
             LinearButton(
-              label: '刷新',
+              label: state.text.ui('刷新'),
               icon: Icons.refresh,
               onPressed: state.refresh,
             ),
             const SizedBox(width: 10),
-            StatusPill(label: '已选 $selectedCount'),
+            StatusPill(label: state.text.selectedAccounts(selectedCount)),
           ],
         ),
         const SizedBox(height: 12),
@@ -408,13 +423,13 @@ class _Toolbar extends StatelessWidget {
           children: [
             const Spacer(),
             LinearButton(
-              label: '浏览器授权',
+              label: state.text.ui('浏览器授权'),
               icon: Icons.login,
               onPressed: () => showBrowserLoginDialog(context, state),
             ),
             const SizedBox(width: 10),
             LinearButton(
-              label: '批量导入',
+              label: state.text.ui('批量导入'),
               icon: Icons.add,
               primary: true,
               onPressed: () => showAccountImportDialog(context, state),
@@ -427,6 +442,10 @@ class _Toolbar extends StatelessWidget {
 }
 
 class _HeaderRow extends StatelessWidget {
+  const _HeaderRow({required this.state});
+
+  final AppState state;
+
   @override
   Widget build(BuildContext context) {
     const style = TextStyle(
@@ -435,16 +454,20 @@ class _HeaderRow extends StatelessWidget {
       height: 1.25,
       fontWeight: FontWeight.w600,
     );
-    return const Padding(
+    return Padding(
       padding: EdgeInsets.fromLTRB(50, 0, 8, 10),
       child: Row(
         children: [
-          Expanded(child: Text('账号信息', style: style)),
-          SizedBox(width: 78, child: Text('标记', style: style)),
-          SizedBox(width: 82, child: Text('状态', style: style)),
+          Expanded(child: Text(state.text.ui('账号信息'), style: style)),
+          SizedBox(width: 78, child: Text(state.text.ui('标记'), style: style)),
+          SizedBox(width: 82, child: Text(state.text.ui('状态'), style: style)),
           SizedBox(
             width: 142,
-            child: Text('操作', textAlign: TextAlign.center, style: style),
+            child: Text(
+              state.text.ui('操作'),
+              textAlign: TextAlign.center,
+              style: style,
+            ),
           ),
         ],
       ),

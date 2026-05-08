@@ -27,7 +27,7 @@ class AccountRail extends StatelessWidget {
       children: [
         _RailCard(
           child: account == null
-              ? const _EmptyAccountDetail()
+              ? _EmptyAccountDetail(state: state)
               : _SelectedAccount(account: account, state: state),
         ),
         const SizedBox(height: 18),
@@ -59,15 +59,21 @@ class _BatchActions extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('批量操作', style: Theme.of(context).textTheme.titleLarge),
+        Text(
+          state.text.ui('批量操作'),
+          style: Theme.of(context).textTheme.titleLarge,
+        ),
         const SizedBox(height: 8),
-        Text('已选 ${selectedIds.length} 个账号', style: AppText.muted),
+        Text(
+          state.text.selectedAccounts(selectedIds.length),
+          style: AppText.muted,
+        ),
         const SizedBox(height: 18),
         Row(
           children: [
             Expanded(
               child: LinearButton(
-                label: '批量收件',
+                label: state.text.ui('批量收件'),
                 icon: Icons.sync,
                 primary: true,
                 onPressed: selectedIds.isEmpty || state.fetching
@@ -78,7 +84,7 @@ class _BatchActions extends StatelessWidget {
             const SizedBox(width: 10),
             Expanded(
               child: LinearButton(
-                label: '删除',
+                label: state.text.ui('删除'),
                 icon: Icons.delete_outline,
                 onPressed: selectedIds.isEmpty
                     ? null
@@ -130,7 +136,7 @@ class _SelectedAccount extends StatelessWidget {
                   ),
                   const SizedBox(height: 8),
                   StatusPill(
-                    label: account.isError ? '异常' : '可用',
+                    label: state.text.ui(account.isError ? '异常' : '可用'),
                     color: account.isError
                         ? LinearColors.red
                         : LinearColors.green,
@@ -141,14 +147,22 @@ class _SelectedAccount extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 18),
-        _InfoLine(label: '最近刷新', value: account.lastSyncedAt),
-        _InfoLine(label: 'Client ID', value: _short(account.clientId)),
+        _InfoLine(
+          state: state,
+          label: state.text.ui('最近刷新'),
+          value: account.lastSyncedAt,
+        ),
+        _InfoLine(
+          state: state,
+          label: 'Client ID',
+          value: _short(account.clientId),
+        ),
         const SizedBox(height: 18),
         Row(
           children: [
             Expanded(
               child: LinearButton(
-                label: '立即收件',
+                label: state.text.ui('立即收取'),
                 icon: Icons.mail_outline,
                 primary: true,
                 onPressed: state.fetchSelectedMail,
@@ -157,7 +171,7 @@ class _SelectedAccount extends StatelessWidget {
             const SizedBox(width: 10),
             Expanded(
               child: LinearButton(
-                label: '复制邮箱',
+                label: state.text.ui('复制邮箱'),
                 icon: Icons.copy,
                 onPressed: () => _copyAccount(context, account),
               ),
@@ -166,6 +180,7 @@ class _SelectedAccount extends StatelessWidget {
         ),
         const SizedBox(height: 18),
         AccountMarkerPalette(
+          state: state,
           value: account.markerColor,
           onChanged: (color) => state.setAccountMarker(account.id, color),
         ),
@@ -178,7 +193,7 @@ class _SelectedAccount extends StatelessWidget {
     if (!context.mounted) return;
     ScaffoldMessenger.of(
       context,
-    ).showSnackBar(const SnackBar(content: Text('邮箱地址已复制')));
+    ).showSnackBar(SnackBar(content: Text(state.text.ui('邮箱地址已复制'))));
   }
 
   String _short(String value) => value.length <= 12
@@ -202,8 +217,13 @@ class _RailCard extends StatelessWidget {
 }
 
 class _InfoLine extends StatelessWidget {
-  const _InfoLine({required this.label, required this.value});
+  const _InfoLine({
+    required this.state,
+    required this.label,
+    required this.value,
+  });
 
+  final AppState state;
   final String label;
   final String value;
 
@@ -216,7 +236,7 @@ class _InfoLine extends StatelessWidget {
           SizedBox(width: 78, child: Text(label, style: AppText.caption)),
           Expanded(
             child: Text(
-              value.isEmpty ? '等待同步' : value,
+              value.isEmpty ? state.text.ui('等待同步') : value,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               textAlign: TextAlign.right,
@@ -230,16 +250,21 @@ class _InfoLine extends StatelessWidget {
 }
 
 class _EmptyAccountDetail extends StatelessWidget {
-  const _EmptyAccountDetail();
+  const _EmptyAccountDetail({required this.state});
+
+  final AppState state;
 
   @override
   Widget build(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('选择账号', style: Theme.of(context).textTheme.titleLarge),
+        Text(
+          state.text.ui('选择账号'),
+          style: Theme.of(context).textTheme.titleLarge,
+        ),
         const SizedBox(height: 8),
-        const Text('点击左侧账号后，可查看状态、标记颜色并执行收件。', style: AppText.muted),
+        Text(state.text.ui('点击左侧账号后，可查看状态、标记颜色并执行收件。'), style: AppText.muted),
       ],
     );
   }

@@ -23,7 +23,7 @@ class LinearButton extends StatelessWidget {
     return FilledButton.icon(
       onPressed: onPressed,
       icon: icon == null ? const SizedBox.shrink() : Icon(icon, size: 18),
-      label: Text(label),
+      label: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis),
       style: FilledButton.styleFrom(
         backgroundColor: bg,
         foregroundColor: fg,

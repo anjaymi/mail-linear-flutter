@@ -12,19 +12,19 @@ class LifecyclePill extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (state.error.isNotEmpty) {
-      return const StatusPill(
-        label: '有异常',
+      return StatusPill(
+        label: state.text.ui('有异常'),
         color: LinearColors.red,
         icon: Icons.error_outline,
       );
     }
-    if (state.fetching || state.lifecycle != '就绪') {
+    if (state.fetching || state.lifecycle != state.text.ready) {
       return StatusPill(
         label: state.lifecycle,
         color: LinearColors.blue,
         icon: Icons.sync,
       );
     }
-    return const StatusPill(label: '就绪');
+    return StatusPill(label: state.text.ready);
   }
 }

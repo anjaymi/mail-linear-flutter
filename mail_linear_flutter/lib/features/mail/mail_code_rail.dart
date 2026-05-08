@@ -23,13 +23,18 @@ class MailCodeRail extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _RailHeader(hasMail: mail != null, hasCode: code != null),
+          _RailHeader(
+            state: state,
+            hasMail: mail != null,
+            hasCode: code != null,
+          ),
           const SizedBox(height: 16),
-          _CodeCard(code: code),
+          _CodeCard(state: state, code: code),
           const SizedBox(height: 16),
-          _MailContext(mail: mail),
+          _MailContext(state: state, mail: mail),
           const SizedBox(height: 16),
           _ActionGroup(
+            state: state,
             code: code,
             body: body,
             onCopy: (text) => _copy(context, text),
@@ -47,26 +52,34 @@ class MailCodeRail extends StatelessWidget {
     if (!context.mounted) return;
     ScaffoldMessenger.of(
       context,
-    ).showSnackBar(const SnackBar(content: Text('已复制到剪贴板')));
+    ).showSnackBar(SnackBar(content: Text(state.text.ui('已复制到剪贴板'))));
   }
 }
 
 class _RailHeader extends StatelessWidget {
-  const _RailHeader({required this.hasMail, required this.hasCode});
+  const _RailHeader({
+    required this.state,
+    required this.hasMail,
+    required this.hasCode,
+  });
 
+  final AppState state;
   final bool hasMail;
   final bool hasCode;
 
   @override
   Widget build(BuildContext context) {
-    final status = !hasMail ? '待选择' : (hasCode ? '已识别' : '未识别');
+    final status = state.text.ui(!hasMail ? '待选择' : (hasCode ? '已识别' : '未识别'));
     final color = !hasMail
         ? LinearColors.faint
         : (hasCode ? LinearColors.green : LinearColors.amber);
     return Row(
       children: [
         Expanded(
-          child: Text('邮件助手', style: Theme.of(context).textTheme.titleLarge),
+          child: Text(
+            state.text.ui('邮件助手'),
+            style: Theme.of(context).textTheme.titleLarge,
+          ),
         ),
         StatusPill(label: status, color: color),
       ],
@@ -75,8 +88,9 @@ class _RailHeader extends StatelessWidget {
 }
 
 class _CodeCard extends StatelessWidget {
-  const _CodeCard({required this.code});
+  const _CodeCard({required this.state, required this.code});
 
+  final AppState state;
   final String? code;
 
   @override
@@ -108,7 +122,7 @@ class _CodeCard extends StatelessWidget {
               ),
               const SizedBox(width: 8),
               Text(
-                active ? '验证码' : '等待识别',
+                state.text.ui(active ? '验证码' : '等待识别'),
                 style: AppText.label.copyWith(
                   color: active ? LinearColors.blue : LinearColors.muted,
                 ),
@@ -126,7 +140,7 @@ class _CodeCard extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 10),
-          const Text('自动提取当前邮件正文中的 4-8 位数字。', style: AppText.caption),
+          Text(state.text.ui('自动提取当前邮件正文中的 4-8 位数字。'), style: AppText.caption),
         ],
       ),
     );
@@ -134,8 +148,9 @@ class _CodeCard extends StatelessWidget {
 }
 
 class _MailContext extends StatelessWidget {
-  const _MailContext({required this.mail});
+  const _MailContext({required this.state, required this.mail});
 
+  final AppState state;
   final MailItem? mail;
 
   @override
@@ -152,7 +167,7 @@ class _MailContext extends StatelessWidget {
         ),
       ),
       child: current == null
-          ? const _EmptyContext()
+          ? _EmptyContext(state: state)
           : Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -172,10 +187,15 @@ class _MailContext extends StatelessWidget {
                   style: AppText.caption,
                 ),
                 const SizedBox(height: 12),
-                _MetaLine(label: '日期', value: _shortDate(current.date)),
                 _MetaLine(
-                  label: '正文',
-                  value: current.preview.isEmpty ? '无预览' : '已缓存',
+                  label: state.text.ui('日期'),
+                  value: _shortDate(current.date),
+                ),
+                _MetaLine(
+                  label: state.text.ui('正文'),
+                  value: current.preview.isEmpty
+                      ? state.text.ui('无预览')
+                      : state.text.ui('已缓存'),
                 ),
               ],
             ),
@@ -187,16 +207,18 @@ class _MailContext extends StatelessWidget {
 }
 
 class _EmptyContext extends StatelessWidget {
-  const _EmptyContext();
+  const _EmptyContext({required this.state});
+
+  final AppState state;
 
   @override
   Widget build(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('当前邮件', style: AppText.itemTitle),
+        Text(state.text.ui('当前邮件'), style: AppText.itemTitle),
         const SizedBox(height: 8),
-        const Text('选择一封邮件后显示发件人、日期和缓存状态。', style: AppText.caption),
+        Text(state.text.ui('选择一封邮件后显示发件人、日期和缓存状态。'), style: AppText.caption),
       ],
     );
   }
@@ -225,11 +247,13 @@ class _MetaLine extends StatelessWidget {
 
 class _ActionGroup extends StatelessWidget {
   const _ActionGroup({
+    required this.state,
     required this.code,
     required this.body,
     required this.onCopy,
   });
 
+  final AppState state;
   final String? code;
   final String body;
   final ValueChanged<String> onCopy;
@@ -239,11 +263,14 @@ class _ActionGroup extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('快捷动作', style: Theme.of(context).textTheme.titleMedium),
+        Text(
+          state.text.ui('快捷动作'),
+          style: Theme.of(context).textTheme.titleMedium,
+        ),
         const SizedBox(height: 12),
         _ActionTile(
-          label: '复制验证码',
-          detail: code == null ? '未识别到数字验证码' : code!,
+          label: state.text.ui('复制验证码'),
+          detail: code == null ? state.text.ui('未识别到数字验证码') : code!,
           icon: Icons.password_outlined,
           enabled: code != null,
           primary: true,
@@ -251,8 +278,10 @@ class _ActionGroup extends StatelessWidget {
         ),
         const SizedBox(height: 10),
         _ActionTile(
-          label: '复制正文',
-          detail: body.isEmpty ? '当前邮件没有正文缓存' : '复制当前邮件纯文本',
+          label: state.text.ui('复制正文'),
+          detail: body.isEmpty
+              ? state.text.ui('当前邮件没有正文缓存')
+              : state.text.ui('复制当前邮件纯文本'),
           icon: Icons.copy_outlined,
           enabled: body.isNotEmpty,
           onTap: body.isEmpty ? null : () => onCopy(body),

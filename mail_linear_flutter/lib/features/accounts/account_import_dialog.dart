@@ -39,16 +39,17 @@ Future<void> showAccountImportDialog(
           }
 
           return AlertDialog(
-            title: const Text('批量导入账号'),
+            title: Text(state.text.ui('批量导入账号')),
             content: SizedBox(
               width: 620,
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
-                    '每行格式：邮箱----密码----client_id----refresh_token。'
-                    '如果 client_id 和令牌顺序反了，后端会自动修正。',
+                  Text(
+                    state.text.ui(
+                      '每行格式：邮箱----密码----client_id----refresh_token。如果 client_id 和令牌顺序反了，后端会自动修正。',
+                    ),
                     style: TextStyle(
                       color: LinearColors.muted,
                       fontWeight: FontWeight.w700,
@@ -79,11 +80,11 @@ Future<void> showAccountImportDialog(
             actions: [
               TextButton(
                 onPressed: busy ? null : () => Navigator.of(context).pop(),
-                child: const Text('取消'),
+                child: Text(state.text.ui('取消')),
               ),
               FilledButton(
                 onPressed: busy ? null : submit,
-                child: Text(busy ? '导入中' : '导入'),
+                child: Text(state.text.ui(busy ? '导入中' : '导入')),
               ),
             ],
           );

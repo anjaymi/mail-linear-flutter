@@ -27,32 +27,32 @@ class DashboardPage extends StatelessWidget {
                     Expanded(
                       child: MetricCard(
                         value: '${state.stats.totalAccounts}',
-                        label: claw ? 'Claw 子邮箱' : '已导入账号',
-                        detail: claw ? '已同步列表' : '全部令牌已载入',
+                        label: state.text.ui(claw ? 'Claw 子邮箱' : '已导入账号'),
+                        detail: state.text.ui(claw ? '已同步列表' : '全部令牌已载入'),
                       ),
                     ),
                     const SizedBox(width: 16),
                     Expanded(
                       child: MetricCard(
                         value: '${state.stats.activeAccounts}',
-                        label: claw ? '可用子邮箱' : '可立即收件',
-                        detail: claw ? '通讯规则正常' : '等待同步',
+                        label: state.text.ui(claw ? '可用子邮箱' : '可立即收件'),
+                        detail: state.text.ui(claw ? '通讯规则正常' : '等待同步'),
                       ),
                     ),
                     const SizedBox(width: 16),
                     Expanded(
                       child: MetricCard(
                         value: '${state.stats.totalInboxMails}',
-                        label: '缓存邮件',
-                        detail: '本地可读',
+                        label: state.text.ui('缓存邮件'),
+                        detail: state.text.ui('本地可读'),
                       ),
                     ),
                     const SizedBox(width: 16),
                     Expanded(
                       child: MetricCard(
                         value: '${state.stats.errorAccounts}',
-                        label: '待处理异常',
-                        detail: '优先修复',
+                        label: state.text.ui('待处理异常'),
+                        detail: state.text.ui('优先修复'),
                       ),
                     ),
                   ],
@@ -87,10 +87,13 @@ class _QueuePanel extends StatelessWidget {
         children: [
           Row(
             children: [
-              Text('今日收件队列', style: Theme.of(context).textTheme.headlineMedium),
+              Text(
+                state.text.ui('今日收件队列'),
+                style: Theme.of(context).textTheme.headlineMedium,
+              ),
               const Spacer(),
               LinearButton(
-                label: claw ? 'Claw 设置' : '管理账号',
+                label: claw ? state.text.clawSettings : state.text.ui('管理账号'),
                 icon: Icons.arrow_forward,
                 onPressed: () =>
                     state.setPage(claw ? AppPage.claw : AppPage.accounts),
@@ -99,9 +102,9 @@ class _QueuePanel extends StatelessWidget {
           ),
           const SizedBox(height: 20),
           if (claw && clawItems.isEmpty)
-            const _EmptyQueue(claw: true)
+            _EmptyQueue(state: state, claw: true)
           else if (!claw && outlookItems.isEmpty)
-            const _EmptyQueue(claw: false)
+            _EmptyQueue(state: state, claw: false)
           else if (claw)
             Expanded(
               child: ListView(
@@ -110,7 +113,7 @@ class _QueuePanel extends StatelessWidget {
                   final email = state.clawMailboxEmail(mailbox);
                   return _QueueRow(
                     state: state,
-                    email: email.isEmpty ? '未命名子邮箱' : email,
+                    email: email.isEmpty ? state.text.ui('未命名子邮箱') : email,
                     color: LinearColors.blue,
                     detail:
                         '${mailbox['status'] ?? 'active'} · ${mailbox['mailbox_type'] ?? 'Claw'}',
@@ -129,7 +132,7 @@ class _QueuePanel extends StatelessWidget {
                         state: state,
                         email: account.email,
                         color: account.color,
-                        detail: 'Outlook 令牌账号',
+                        detail: state.text.ui('Outlook 令牌账号'),
                         onTap: () =>
                             state.selectAccount(account, openMail: false),
                       ),
@@ -196,7 +199,7 @@ class _QueueRow extends StatelessWidget {
                 ],
               ),
             ),
-            const StatusPill(label: '可用'),
+            StatusPill(label: state.text.ui('可用')),
           ],
         ),
       ),
@@ -220,16 +223,24 @@ class _RightRail extends StatelessWidget {
             children: [
               Row(
                 children: [
-                  Text('收件同步', style: Theme.of(context).textTheme.titleLarge),
+                  Text(
+                    state.text.ui('收件同步'),
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
                   const Spacer(),
-                  const StatusPill(label: '待执行'),
+                  StatusPill(label: state.text.ui('待执行')),
                 ],
               ),
               const SizedBox(height: 12),
-              const Text('账号将同步到本地缓存，完成后可在邮件页直接阅读。', style: AppText.muted),
+              Text(
+                state.text.ui('账号将同步到本地缓存，完成后可在邮件页直接阅读。'),
+                style: AppText.muted,
+              ),
               const SizedBox(height: 20),
               LinearButton(
-                label: state.mode == WorkMode.claw ? 'Claw 收件' : '开始收取',
+                label: state.mode == WorkMode.claw
+                    ? state.text.clawFetch
+                    : state.text.startFetch,
                 icon: Icons.sync,
                 primary: true,
                 onPressed:
@@ -263,10 +274,13 @@ class _RecentMails extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('最近邮件', style: Theme.of(context).textTheme.titleLarge),
+          Text(
+            state.text.ui('最近邮件'),
+            style: Theme.of(context).textTheme.titleLarge,
+          ),
           const SizedBox(height: 16),
           if (mails.isEmpty)
-            const Text('暂无邮件', style: AppText.muted)
+            Text(state.text.ui('暂无邮件'), style: AppText.muted)
           else
             Expanded(
               child: ListView(
@@ -334,13 +348,16 @@ class _RecentMailRow extends StatelessWidget {
 }
 
 class _EmptyQueue extends StatelessWidget {
-  const _EmptyQueue({required this.claw});
+  const _EmptyQueue({required this.state, required this.claw});
+  final AppState state;
   final bool claw;
   @override
   Widget build(BuildContext context) => Padding(
     padding: EdgeInsets.only(top: 32),
     child: Text(
-      claw ? '暂无 Claw 子邮箱，先到 Claw 设置绑定并同步。' : '暂无账号，先导入 Outlook 令牌账号。',
+      state.text.ui(
+        claw ? '暂无 Claw 子邮箱，先到 Claw 设置绑定并同步。' : '暂无账号，先导入 Outlook 令牌账号。',
+      ),
       style: AppText.muted,
     ),
   );

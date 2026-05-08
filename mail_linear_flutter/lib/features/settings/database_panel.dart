@@ -39,18 +39,34 @@ class _DatabasePanelState extends State<DatabasePanel> {
             children: [
               Expanded(
                 child: Text(
-                  '数据库维护',
+                  widget.state.text.ui('数据库维护'),
                   style: Theme.of(context).textTheme.titleLarge,
                 ),
               ),
-              StatusPill(label: busy ? '处理中' : '就绪'),
+              StatusPill(
+                label: busy
+                    ? widget.state.text.ui('处理中')
+                    : widget.state.text.ready,
+              ),
             ],
           ),
           const SizedBox(height: 14),
-          _MetricLine(label: '文件', value: _shortPath(health?['dbPath'])),
-          _MetricLine(label: '大小', value: _size(health?['sizeBytes'])),
-          _MetricLine(label: '缓存邮件', value: '${issues?['totalRows'] ?? 0}'),
-          _MetricLine(label: '重复/孤立', value: _issueText(issues)),
+          _MetricLine(
+            label: widget.state.text.ui('文件'),
+            value: _shortPath(health?['dbPath']),
+          ),
+          _MetricLine(
+            label: widget.state.text.ui('大小'),
+            value: _size(health?['sizeBytes']),
+          ),
+          _MetricLine(
+            label: widget.state.text.ui('缓存邮件'),
+            value: '${issues?['totalRows'] ?? 0}',
+          ),
+          _MetricLine(
+            label: widget.state.text.ui('重复/孤立'),
+            value: _issueText(issues),
+          ),
           if (message.isNotEmpty) ...[
             const SizedBox(height: 12),
             Text(message, style: AppText.muted),
@@ -61,23 +77,23 @@ class _DatabasePanelState extends State<DatabasePanel> {
             runSpacing: 10,
             children: [
               LinearButton(
-                label: '健康检查',
+                label: widget.state.text.ui('健康检查'),
                 icon: Icons.health_and_safety_outlined,
                 onPressed: busy ? null : _health,
               ),
               LinearButton(
-                label: '预检查',
+                label: widget.state.text.ui('预检查'),
                 icon: Icons.manage_search,
                 onPressed: busy ? null : () => _repair(dryRun: true),
               ),
               LinearButton(
-                label: '修复缓存',
+                label: widget.state.text.ui('修复缓存'),
                 icon: Icons.build_circle_outlined,
                 primary: true,
                 onPressed: busy ? null : () => _repair(dryRun: false),
               ),
               LinearButton(
-                label: '压缩优化',
+                label: widget.state.text.ui('压缩优化'),
                 icon: Icons.compress,
                 onPressed: busy ? null : _optimize,
               ),
@@ -91,7 +107,7 @@ class _DatabasePanelState extends State<DatabasePanel> {
   Future<void> _health() async {
     await _run(() async {
       health = await widget.state.api!.databaseHealth();
-      message = '健康检查完成';
+      message = widget.state.text.ui('健康检查完成');
     });
   }
 
@@ -103,7 +119,7 @@ class _DatabasePanelState extends State<DatabasePanel> {
       final remaining = left is Map ? Map<String, dynamic>.from(left) : null;
       message = dryRun
           ? _repairPreview()
-          : '修复完成，剩余问题 ${_issueText(remaining)}';
+          : '${widget.state.text.ui('修复完成，剩余问题')} ${_issueText(remaining)}';
     });
   }
 
@@ -111,7 +127,7 @@ class _DatabasePanelState extends State<DatabasePanel> {
     await _run(() async {
       final result = await widget.state.api!.databaseOptimize();
       health = await widget.state.api!.databaseHealth();
-      message = '已压缩 ${_size(result['savedBytes'])}';
+      message = '${widget.state.text.ui('已压缩')} ${_size(result['savedBytes'])}';
     });
   }
 
@@ -133,9 +149,10 @@ class _DatabasePanelState extends State<DatabasePanel> {
 
   String _repairPreview() {
     final next = repair;
-    if (next == null) return '预检查完成';
-    return '可处理：空 ID ${next['normalizedEmptyMailIds'] ?? 0}，重复 '
-        '${next['deletedDuplicateRows'] ?? 0}，孤立 ${next['deletedOrphanRows'] ?? 0}';
+    if (next == null) return widget.state.text.ui('预检查完成');
+    return '${widget.state.text.ui('可处理：空 ID')} ${next['normalizedEmptyMailIds'] ?? 0}'
+        '${widget.state.text.ui('，重复')} ${next['deletedDuplicateRows'] ?? 0}'
+        '${widget.state.text.ui('，孤立')} ${next['deletedOrphanRows'] ?? 0}';
   }
 }
 

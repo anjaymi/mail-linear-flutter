@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../app/app_state.dart';
 import '../../core/theme/app_theme.dart';
 
 class MarkerOption {
@@ -30,11 +31,13 @@ MarkerOption? markerOptionOf(String value) {
 class AccountMarkerPalette extends StatelessWidget {
   const AccountMarkerPalette({
     super.key,
+    required this.state,
     required this.value,
     required this.onChanged,
     this.compact = false,
   });
 
+  final AppState state;
   final String value;
   final ValueChanged<String> onChanged;
   final bool compact;
@@ -46,7 +49,10 @@ class AccountMarkerPalette extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         if (!compact) ...[
-          Text('账号标记', style: Theme.of(context).textTheme.titleMedium),
+          Text(
+            state.text.ui('账号标记'),
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
           const SizedBox(height: 10),
         ],
         Wrap(
@@ -56,11 +62,16 @@ class AccountMarkerPalette extends StatelessWidget {
             for (final option in markerOptions)
               _Swatch(
                 option: option,
+                state: state,
                 selected: selected?.value == option.value,
                 compact: compact,
                 onTap: () => onChanged(option.value),
               ),
-            _ClearSwatch(onTap: () => onChanged(''), compact: compact),
+            _ClearSwatch(
+              state: state,
+              onTap: () => onChanged(''),
+              compact: compact,
+            ),
           ],
         ),
       ],
@@ -69,15 +80,16 @@ class AccountMarkerPalette extends StatelessWidget {
 }
 
 class MarkerLabel extends StatelessWidget {
-  const MarkerLabel({super.key, required this.value});
+  const MarkerLabel({super.key, required this.state, required this.value});
 
+  final AppState state;
   final String value;
 
   @override
   Widget build(BuildContext context) {
     final option = markerOptionOf(value);
     if (option == null) {
-      return const Text('未标记', style: AppText.caption);
+      return Text(state.text.ui('未标记'), style: AppText.caption);
     }
     return Row(
       children: [
@@ -92,7 +104,7 @@ class MarkerLabel extends StatelessWidget {
         const SizedBox(width: 8),
         Expanded(
           child: Text(
-            '${option.label}色',
+            state.text.colorLabel(option.label),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: AppText.bodyStrong,
@@ -106,17 +118,19 @@ class MarkerLabel extends StatelessWidget {
 class MarkerPaletteButton extends StatelessWidget {
   const MarkerPaletteButton({
     super.key,
+    required this.state,
     required this.value,
     required this.onChanged,
   });
 
+  final AppState state;
   final String value;
   final ValueChanged<String> onChanged;
 
   @override
   Widget build(BuildContext context) {
     return PopupMenuButton<String>(
-      tooltip: '标记颜色',
+      tooltip: state.text.ui('标记颜色'),
       onSelected: onChanged,
       itemBuilder: (context) => [
         for (final option in markerOptions)
@@ -126,12 +140,12 @@ class MarkerPaletteButton extends StatelessWidget {
               children: [
                 _ColorDot(color: option.color),
                 const SizedBox(width: 10),
-                Text('${option.label}色标记'),
+                Text(state.text.colorMarker(option.label)),
               ],
             ),
           ),
         const PopupMenuDivider(),
-        const PopupMenuItem(value: '', child: Text('清除标记')),
+        PopupMenuItem(value: '', child: Text(state.text.ui('清除标记'))),
       ],
       child: Container(
         width: 34,
@@ -170,12 +184,14 @@ class _ColorDot extends StatelessWidget {
 class _Swatch extends StatelessWidget {
   const _Swatch({
     required this.option,
+    required this.state,
     required this.selected,
     required this.compact,
     required this.onTap,
   });
 
   final MarkerOption option;
+  final AppState state;
   final bool selected;
   final bool compact;
   final VoidCallback onTap;
@@ -184,7 +200,7 @@ class _Swatch extends StatelessWidget {
   Widget build(BuildContext context) {
     final size = compact ? 28.0 : 34.0;
     return Tooltip(
-      message: '${option.label}色标记',
+      message: state.text.colorMarker(option.label),
       child: InkWell(
         borderRadius: BorderRadius.circular(999),
         onTap: onTap,
@@ -212,15 +228,20 @@ class _Swatch extends StatelessWidget {
 }
 
 class _ClearSwatch extends StatelessWidget {
-  const _ClearSwatch({required this.onTap, required this.compact});
+  const _ClearSwatch({
+    required this.state,
+    required this.onTap,
+    required this.compact,
+  });
 
+  final AppState state;
   final VoidCallback onTap;
   final bool compact;
 
   @override
   Widget build(BuildContext context) {
     return Tooltip(
-      message: '清除标记',
+      message: state.text.ui('清除标记'),
       child: InkWell(
         borderRadius: BorderRadius.circular(999),
         onTap: onTap,
@@ -233,7 +254,7 @@ class _ClearSwatch extends StatelessWidget {
             borderRadius: BorderRadius.circular(999),
             border: Border.all(color: LinearColors.line),
           ),
-          child: const Text('清除', style: AppText.label),
+          child: Text(state.text.ui('清除'), style: AppText.label),
         ),
       ),
     );

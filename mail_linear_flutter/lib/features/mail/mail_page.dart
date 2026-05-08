@@ -43,7 +43,10 @@ class _MailList extends StatelessWidget {
         children: [
           Row(
             children: [
-              Text('Inbox', style: Theme.of(context).textTheme.headlineMedium),
+              Text(
+                state.text.ui('收件箱'),
+                style: Theme.of(context).textTheme.headlineMedium,
+              ),
               const Spacer(),
               StatusPill(label: state.mailSource, color: LinearColors.blue),
               const SizedBox(width: 8),
@@ -54,16 +57,20 @@ class _MailList extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 12),
-          const TextField(
+          TextField(
             decoration: InputDecoration(
-              prefixIcon: Icon(Icons.search),
-              hintText: '搜索邮件、验证码或发件人',
+              prefixIcon: const Icon(Icons.search),
+              hintText: state.text.ui('搜索邮件、验证码或发件人'),
             ),
           ),
           const SizedBox(height: 16),
           if (!hasMailbox)
             Text(
-              state.mode == WorkMode.claw ? '先在 Claw 账号页选择子邮箱。' : '先在账号页选择邮箱。',
+              state.text.ui(
+                state.mode == WorkMode.claw
+                    ? '先在 Claw 账号页选择子邮箱。'
+                    : '先在账号页选择邮箱。',
+              ),
             )
           else
             _FetchBar(state: state),
@@ -116,7 +123,7 @@ class _FetchBar extends StatelessWidget {
         ),
         const SizedBox(width: 10),
         LinearButton(
-          label: state.fetching ? '收取中' : '收取',
+          label: state.fetching ? state.text.fetching : state.text.ui('收取'),
           icon: Icons.sync,
           primary: true,
           onPressed: state.fetching ? null : state.fetchSelectedMail,
@@ -237,11 +244,11 @@ class _Reader extends StatelessWidget {
       padding: const EdgeInsets.all(30),
       decoration: AppSurfaces.panel(radius: 28),
       child: mail == null
-          ? const Center(child: Text('选择一封邮件开始阅读'))
+          ? Center(child: Text(state.text.ui('选择一封邮件开始阅读')))
           : Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const StatusPill(label: 'Inbox'),
+                StatusPill(label: state.text.ui('收件箱')),
                 const SizedBox(height: 18),
                 Text(
                   mail.subject,
@@ -256,7 +263,9 @@ class _Reader extends StatelessWidget {
                 Expanded(
                   child: SingleChildScrollView(
                     child: Text(
-                      mail.preview.isEmpty ? '无正文预览。' : mail.preview,
+                      mail.preview.isEmpty
+                          ? state.text.ui('无正文预览。')
+                          : mail.preview,
                       style: AppText.body.copyWith(fontSize: 16, height: 1.7),
                     ),
                   ),

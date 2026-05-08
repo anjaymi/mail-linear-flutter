@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../app/app_state.dart';
 import '../../core/models/mail_account.dart';
 import '../../core/theme/app_theme.dart';
 import '../../shared/widgets/status_pill.dart';
@@ -9,6 +10,7 @@ import 'account_marker_palette.dart';
 class AccountRow extends StatelessWidget {
   const AccountRow({
     super.key,
+    required this.state,
     required this.account,
     required this.active,
     required this.checked,
@@ -18,6 +20,7 @@ class AccountRow extends StatelessWidget {
     required this.onMarker,
   });
 
+  final AppState state;
   final MailAccount account;
   final bool active;
   final bool checked;
@@ -59,12 +62,17 @@ class AccountRow extends StatelessWidget {
             const SizedBox(width: 8),
             _MarkerStrip(color: account.color),
             const SizedBox(width: 12),
-            Expanded(child: _AccountIdentity(account: account)),
-            SizedBox(width: 78, child: MarkerLabel(value: account.markerColor)),
+            Expanded(
+              child: _AccountIdentity(state: state, account: account),
+            ),
+            SizedBox(
+              width: 78,
+              child: MarkerLabel(state: state, value: account.markerColor),
+            ),
             SizedBox(
               width: 82,
               child: StatusPill(
-                label: account.isError ? '异常' : '可用',
+                label: state.text.ui(account.isError ? '异常' : '可用'),
                 color: account.isError ? LinearColors.red : LinearColors.green,
               ),
             ),
@@ -74,21 +82,22 @@ class AccountRow extends StatelessWidget {
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   MarkerPaletteButton(
+                    state: state,
                     value: account.markerColor,
                     onChanged: onMarker,
                   ),
                   _RowIconButton(
-                    tooltip: '复制邮箱',
+                    tooltip: state.text.ui('复制邮箱'),
                     onPressed: () => _copyAccount(context, account),
                     icon: Icons.copy,
                   ),
                   _RowIconButton(
-                    tooltip: '收件',
+                    tooltip: state.text.ui('收取'),
                     onPressed: onTap,
                     icon: Icons.mail_outline,
                   ),
                   _RowIconButton(
-                    tooltip: '删除',
+                    tooltip: state.text.ui('删除'),
                     onPressed: onDelete,
                     icon: Icons.close,
                     color: LinearColors.red,
@@ -107,12 +116,13 @@ class AccountRow extends StatelessWidget {
     if (!context.mounted) return;
     ScaffoldMessenger.of(
       context,
-    ).showSnackBar(const SnackBar(content: Text('邮箱地址已复制')));
+    ).showSnackBar(SnackBar(content: Text(state.text.ui('邮箱地址已复制'))));
   }
 }
 
 class _AccountIdentity extends StatelessWidget {
-  const _AccountIdentity({required this.account});
+  const _AccountIdentity({required this.state, required this.account});
+  final AppState state;
   final MailAccount account;
 
   @override
@@ -129,7 +139,9 @@ class _AccountIdentity extends StatelessWidget {
         ),
         const SizedBox(height: 4),
         Text(
-          account.lastSyncedAt.isEmpty ? '等待收件' : '已刷新 ${account.lastSyncedAt}',
+          account.lastSyncedAt.isEmpty
+              ? state.text.ui('等待同步')
+              : '${state.text.ui('已刷新')} ${account.lastSyncedAt}',
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           style: AppText.caption,

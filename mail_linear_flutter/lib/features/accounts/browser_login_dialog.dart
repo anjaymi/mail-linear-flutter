@@ -27,7 +27,10 @@ class _BrowserLoginDialogState extends State<_BrowserLoginDialog> {
   final clientId = TextEditingController(text: _defaultClientId);
   bool busy = false;
   bool polling = false;
-  String message = '会打开系统浏览器完成 Microsoft 授权，成功后自动写入账号。';
+  String? messageKey = '会打开系统浏览器完成 Microsoft 授权，成功后自动写入账号。';
+  String? rawMessage;
+
+  String get message => rawMessage ?? widget.state.text.ui(messageKey ?? '');
 
   @override
   void dispose() {
@@ -39,15 +42,17 @@ class _BrowserLoginDialogState extends State<_BrowserLoginDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: const Text('浏览器授权登录'),
+      title: Text(widget.state.text.ui('浏览器授权登录')),
       content: SizedBox(
         width: 560,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              '适合没有现成 refresh token 的普通 Outlook / Hotmail 账号。',
+            Text(
+              widget.state.text.ui(
+                '适合没有现成 refresh token 的普通 Outlook / Hotmail 账号。',
+              ),
               style: TextStyle(
                 color: LinearColors.muted,
                 fontWeight: FontWeight.w700,
@@ -70,11 +75,11 @@ class _BrowserLoginDialogState extends State<_BrowserLoginDialog> {
       actions: [
         TextButton(
           onPressed: busy ? null : () => Navigator.of(context).pop(),
-          child: const Text('取消'),
+          child: Text(widget.state.text.ui('取消')),
         ),
         FilledButton(
           onPressed: busy ? null : _start,
-          child: Text(polling ? '等待授权' : '打开浏览器'),
+          child: Text(widget.state.text.ui(polling ? '等待授权' : '打开浏览器')),
         ),
       ],
     );
@@ -87,7 +92,8 @@ class _BrowserLoginDialogState extends State<_BrowserLoginDialog> {
     setState(() {
       busy = true;
       polling = true;
-      message = '正在创建授权会话...';
+      messageKey = '正在创建授权会话...';
+      rawMessage = null;
     });
 
     try {
@@ -98,18 +104,23 @@ class _BrowserLoginDialogState extends State<_BrowserLoginDialog> {
       );
       final state = session['state']?.toString() ?? '';
       final url = session['authorization_url']?.toString() ?? '';
-      if (state.isEmpty || url.isEmpty) throw Exception('授权会话返回不完整。');
+      if (state.isEmpty || url.isEmpty) {
+        throw Exception(widget.state.text.ui('授权会话返回不完整。'));
+      }
 
       await _openSystemBrowser(url);
       if (!mounted) return;
-      setState(() => message = '浏览器已打开，请完成登录授权。');
+      setState(() {
+        messageKey = '浏览器已打开，请完成登录授权。';
+        rawMessage = null;
+      });
       await _poll(state);
     } catch (ex) {
       if (!mounted) return;
       setState(() {
         busy = false;
         polling = false;
-        message = ex.toString();
+        rawMessage = ex.toString();
       });
     }
   }
@@ -128,18 +139,25 @@ class _BrowserLoginDialogState extends State<_BrowserLoginDialog> {
         final email = account is Map ? account['email']?.toString() : null;
         if (!mounted) return;
         Navigator.of(context).pop();
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('${email ?? '账号'} 已授权并导入')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              '${email ?? widget.state.text.ui('账号')} ${widget.state.text.ui('已授权并导入')}',
+            ),
+          ),
+        );
         return;
       }
-      throw Exception(result['error']?.toString() ?? '授权失败');
+      throw Exception(
+        result['error']?.toString() ?? widget.state.text.ui('授权失败'),
+      );
     }
     if (!mounted) return;
     setState(() {
       busy = false;
       polling = false;
-      message = '授权等待超时，请重新打开浏览器授权。';
+      messageKey = '授权等待超时，请重新打开浏览器授权。';
+      rawMessage = null;
     });
   }
 

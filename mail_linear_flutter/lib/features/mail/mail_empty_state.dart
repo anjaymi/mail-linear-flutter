@@ -29,28 +29,30 @@ class EmptyMailState extends StatelessWidget {
           const SizedBox(height: 12),
           Text(
             hasMailbox
-                ? '暂无缓存邮件'
+                ? state.text.ui('暂无缓存邮件')
                 : state.mode == WorkMode.claw
-                ? '先选择一个 Claw 子邮箱'
-                : '先选择一个账号',
+                ? state.text.ui('先选择一个 Claw 子邮箱')
+                : state.text.ui('先选择一个账号'),
             style: AppText.bodyStrong,
           ),
           const SizedBox(height: 8),
           Text(
             hasMailbox
                 ? state.mode == WorkMode.claw
-                      ? '点击收取后会从 Claw Coremail 拉取并写入本地缓存。'
-                      : '点击收取后会显示 Graph / IMAP / 缓存来源。'
+                      ? state.text.ui('点击收取后会从 Claw Coremail 拉取并写入本地缓存。')
+                      : state.text.ui('点击收取后会显示 Graph / IMAP / 缓存来源。')
                 : state.mode == WorkMode.claw
-                ? '到 Claw 账号页选择子邮箱后再读取邮件。'
-                : '到账号页选择邮箱后再读取邮件。',
+                ? state.text.ui('到 Claw 账号页选择子邮箱后再读取邮件。')
+                : state.text.ui('到账号页选择邮箱后再读取邮件。'),
             textAlign: TextAlign.center,
             style: AppText.muted,
           ),
           if (hasMailbox) ...[
             const SizedBox(height: 16),
             LinearButton(
-              label: state.fetching ? '收取中' : '立即收取',
+              label: state.fetching
+                  ? state.text.fetching
+                  : state.text.ui('立即收取'),
               icon: Icons.sync,
               primary: true,
               onPressed: state.fetching ? null : state.fetchSelectedMail,

@@ -89,7 +89,7 @@ class _ClawSettingsPanelState extends State<ClawSettingsPanel> {
               ),
               const Spacer(),
               StatusPill(
-                label: connected ? '已绑定' : '未绑定',
+                label: widget.state.text.ui(connected ? '已绑定' : '未绑定'),
                 color: connected ? LinearColors.green : LinearColors.amber,
               ),
             ],
@@ -98,13 +98,15 @@ class _ClawSettingsPanelState extends State<ClawSettingsPanel> {
           Text(
             connected
                 ? '${status['userEmail'] ?? ''} · ${status['domain'] ?? 'claw.163.com'}'
-                : '绑定 Claw 后可同步子邮箱和通讯规则。',
+                : widget.state.text.ui('绑定 Claw 后可同步子邮箱和通讯规则。'),
             style: AppText.muted,
           ),
           const SizedBox(height: 22),
           TextField(
             controller: email,
-            decoration: const InputDecoration(labelText: 'Claw 登录邮箱'),
+            decoration: InputDecoration(
+              labelText: widget.state.text.ui('Claw 登录邮箱'),
+            ),
           ),
           const SizedBox(height: 12),
           Row(
@@ -112,17 +114,19 @@ class _ClawSettingsPanelState extends State<ClawSettingsPanel> {
               Expanded(
                 child: TextField(
                   controller: code,
-                  decoration: const InputDecoration(labelText: '验证码'),
+                  decoration: InputDecoration(
+                    labelText: widget.state.text.ui('验证码'),
+                  ),
                 ),
               ),
               const SizedBox(width: 12),
               LinearButton(
-                label: '发送验证码',
+                label: widget.state.text.ui('发送验证码'),
                 onPressed: busy
                     ? null
                     : () => _run(
                         () => widget.state.api!.clawSendCode(email.text),
-                        '验证码已发送',
+                        widget.state.text.ui('验证码已发送'),
                       ),
               ),
             ],
@@ -131,7 +135,7 @@ class _ClawSettingsPanelState extends State<ClawSettingsPanel> {
           Row(
             children: [
               LinearButton(
-                label: '绑定并同步',
+                label: widget.state.text.ui('绑定并同步'),
                 icon: Icons.sync,
                 primary: true,
                 onPressed: busy
@@ -141,37 +145,42 @@ class _ClawSettingsPanelState extends State<ClawSettingsPanel> {
                           email.text,
                           code.text,
                         ),
-                        'Claw 已绑定并同步',
+                        widget.state.text.ui('Claw 已绑定并同步'),
                       ),
               ),
               const SizedBox(width: 12),
               LinearButton(
-                label: '刷新授权',
+                label: widget.state.text.ui('刷新授权'),
                 icon: Icons.refresh,
                 onPressed: busy
                     ? null
-                    : () =>
-                          _run(widget.state.api!.clawRefreshAuth, 'Claw 授权已刷新'),
+                    : () => _run(
+                        widget.state.api!.clawRefreshAuth,
+                        widget.state.text.ui('Claw 授权已刷新'),
+                      ),
               ),
             ],
           ),
           const Divider(height: 34),
           _MailboxCreator(
+            state: widget.state,
             controller: suffix,
             busy: busy,
             onCreate: () => _run(
               () => widget.state.api!.clawCreateMailbox(suffix.text),
-              '子邮箱已创建',
+              widget.state.text.ui('子邮箱已创建'),
             ),
             onSync: () => _run(
               () => widget.state.api!
                   .clawMailboxes(sync: true)
                   .then((items) => mailboxes = items),
-              '子邮箱已同步',
+              widget.state.text.ui('子邮箱已同步'),
             ),
           ),
           const SizedBox(height: 14),
-          Expanded(child: _MailboxList(items: mailboxes)),
+          Expanded(
+            child: _MailboxList(state: widget.state, items: mailboxes),
+          ),
           if (message.isNotEmpty)
             Padding(
               padding: const EdgeInsets.only(top: 12),
@@ -185,12 +194,14 @@ class _ClawSettingsPanelState extends State<ClawSettingsPanel> {
 
 class _MailboxCreator extends StatelessWidget {
   const _MailboxCreator({
+    required this.state,
     required this.controller,
     required this.busy,
     required this.onCreate,
     required this.onSync,
   });
 
+  final AppState state;
   final TextEditingController controller;
   final bool busy;
   final VoidCallback onCreate;
@@ -203,26 +214,35 @@ class _MailboxCreator extends StatelessWidget {
         Expanded(
           child: TextField(
             controller: controller,
-            decoration: const InputDecoration(labelText: '新子邮箱后缀'),
+            decoration: InputDecoration(labelText: state.text.ui('新子邮箱后缀')),
           ),
         ),
         const SizedBox(width: 12),
-        LinearButton(label: '创建', onPressed: busy ? null : onCreate),
+        LinearButton(
+          label: state.text.ui('创建'),
+          onPressed: busy ? null : onCreate,
+        ),
         const SizedBox(width: 8),
-        LinearButton(label: '同步', onPressed: busy ? null : onSync),
+        LinearButton(
+          label: state.text.ui('同步'),
+          onPressed: busy ? null : onSync,
+        ),
       ],
     );
   }
 }
 
 class _MailboxList extends StatelessWidget {
-  const _MailboxList({required this.items});
+  const _MailboxList({required this.state, required this.items});
+  final AppState state;
   final List<Map<String, dynamic>> items;
 
   @override
   Widget build(BuildContext context) {
     if (items.isEmpty) {
-      return const Center(child: Text('暂无 Claw 子邮箱', style: AppText.muted));
+      return Center(
+        child: Text(state.text.ui('暂无 Claw 子邮箱'), style: AppText.muted),
+      );
     }
     return ListView.separated(
       itemCount: items.length,
