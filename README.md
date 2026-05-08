@@ -30,7 +30,6 @@ Mail Linear Flutter 是一个 Windows 桌面邮箱管理工具，使用 Flutter 
 - `native-mail-api/` - Flutter 应用启动和调用的 Rust 本地服务。
 - `docs/` - 项目说明和迁移文档。
 - `LICENSE` - GNU GPL v3.0 开源协议。
-- `REFERENCES.md` - 项目参考来源、借鉴方向和合规说明。
 
 ## 环境要求
 
@@ -86,10 +85,6 @@ runtime\native\outlook-mail-native.exe
 本项目按 GNU General Public License v3.0 开源，详见 `LICENSE`。
 
 这意味着你可以自由使用、研究、修改和分发本项目；如果你分发修改后的版本，也需要按 GPL-3.0 继续开放对应源码。
-
-## 参考与致谢
-
-本项目不是直接 fork 或复制某一个开源项目，而是在本地桌面邮箱管理工具的目标下，参考了若干开源项目的产品思路、功能边界和接口方向。详细说明见 [`REFERENCES.md`](REFERENCES.md)。
 
 ## English Summary
 
