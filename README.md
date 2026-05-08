@@ -24,8 +24,6 @@ Mail Linear Flutter 是一个 Windows 桌面邮箱管理工具，使用 Flutter 
 
 ![Language Settings](docs/screenshots/settings-language-menu.png)
 
-![Japanese Dashboard](docs/screenshots/dashboard-ja.png)
-
 ## Repository Layout
 
 - `mail_linear_flutter/` - Flutter 桌面应用。
