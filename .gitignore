@@ -1,0 +1,29 @@
+# Local build output
+dist/
+release/
+**/build/
+**/target/
+
+# Flutter / Dart generated files
+**/.dart_tool/
+**/.flutter-plugins-dependencies
+**/.pub-cache/
+**/.pub/
+**/coverage/
+**/windows/flutter/ephemeral/
+
+# IDE and OS files
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Legacy prototypes kept outside the Flutter open-source package
+Launcher/
+LauncherWinUI/
+outlook-mail-manager/
+启动.bat
+启动.ps1
