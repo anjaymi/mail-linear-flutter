@@ -18,21 +18,26 @@ class WorkspaceSidebar extends StatelessWidget {
       decoration: AppSurfaces.chrome(radius: 26),
       child: Column(
         children: [
-          const _Brand(),
+          _Brand(state: state),
           const SizedBox(height: 30),
           _NavItem(
             Icons.space_dashboard_outlined,
-            '工作台',
+            state.text.dashboard,
             AppPage.dashboard,
             state,
           ),
-          _NavItem(Icons.alternate_email, '账号', AppPage.accounts, state),
-          _NavItem(Icons.mail_outline, '邮件', AppPage.mail, state),
+          _NavItem(
+            Icons.alternate_email,
+            state.text.accounts,
+            AppPage.accounts,
+            state,
+          ),
+          _NavItem(Icons.mail_outline, state.text.mail, AppPage.mail, state),
           if (state.mode == WorkMode.claw)
             _NavItem(Icons.hub_outlined, 'Claw', AppPage.claw, state),
-          _NavItem(Icons.tune, '设置', AppPage.settings, state),
+          _NavItem(Icons.tune, state.text.settings, AppPage.settings, state),
           const Spacer(),
-          _RuntimeBadge(mode: state.mode),
+          _RuntimeBadge(state: state),
         ],
       ),
     );
@@ -40,7 +45,9 @@ class WorkspaceSidebar extends StatelessWidget {
 }
 
 class _Brand extends StatelessWidget {
-  const _Brand();
+  const _Brand({required this.state});
+
+  final AppState state;
 
   @override
   Widget build(BuildContext context) {
@@ -70,7 +77,7 @@ class _Brand extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                '邮箱工作台',
+                state.text.workspace,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: AppText.sectionTitle,
@@ -179,14 +186,18 @@ class _IconTile extends StatelessWidget {
 }
 
 class _RuntimeBadge extends StatelessWidget {
-  const _RuntimeBadge({required this.mode});
+  const _RuntimeBadge({required this.state});
 
-  final WorkMode mode;
+  final AppState state;
 
   @override
   Widget build(BuildContext context) {
-    final title = mode == WorkMode.claw ? 'Claw 通道' : 'Outlook 通道';
-    final detail = mode == WorkMode.claw ? '子邮箱与通讯规则' : '令牌收件与缓存';
+    final title = state.mode == WorkMode.claw
+        ? state.text.clawChannel
+        : state.text.outlookChannel;
+    final detail = state.mode == WorkMode.claw
+        ? state.text.clawChannelDetail
+        : state.text.outlookChannelDetail;
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(14),

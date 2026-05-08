@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 
+import '../core/localization/app_localizations.dart';
 import '../core/theme/app_theme.dart';
 import '../features/accounts/accounts_page.dart';
 import '../features/dashboard/dashboard_page.dart';
@@ -32,13 +34,20 @@ class _MailLinearAppState extends State<MailLinearApp> {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Mail Workspace',
-      debugShowCheckedModeBanner: false,
-      theme: AppTheme.light(),
-      home: AnimatedBuilder(
-        animation: state,
-        builder: (context, _) => LinearShell(state: state, child: _page()),
+    return AnimatedBuilder(
+      animation: state,
+      builder: (context, _) => MaterialApp(
+        title: state.text.appTitle,
+        debugShowCheckedModeBanner: false,
+        theme: AppTheme.light(),
+        locale: state.language.locale,
+        supportedLocales: AppLanguage.values.map((item) => item.locale),
+        localizationsDelegates: const [
+          GlobalMaterialLocalizations.delegate,
+          GlobalCupertinoLocalizations.delegate,
+          GlobalWidgetsLocalizations.delegate,
+        ],
+        home: LinearShell(state: state, child: _page()),
       ),
     );
   }

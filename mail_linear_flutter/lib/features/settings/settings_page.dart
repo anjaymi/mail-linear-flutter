@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../app/app_state.dart';
+import '../../core/localization/app_localizations.dart';
 import '../../core/platform/sound_service.dart';
 import '../../core/theme/app_theme.dart';
 import '../../shared/widgets/action_button.dart';
@@ -55,29 +56,29 @@ class _GeneralPanel extends StatelessWidget {
       decoration: AppSurfaces.panel(radius: 28),
       child: Column(
         children: [
-          const _SettingRow(
-            title: '界面语言',
-            detail: '桌面端主要界面文字。',
-            trailing: StatusPill(label: '中文'),
-          ),
-          const _SettingRow(
-            title: '自动启动',
-            detail: '打开 EXE 后自动创建本地 API 端口。',
-            trailing: StatusPill(label: '已开启'),
+          _SettingRow(
+            title: state.text.languageTitle,
+            detail: state.text.languageDetail,
+            trailing: _LanguageControls(state: state),
           ),
           _SettingRow(
-            title: '自动接收',
-            detail: '按间隔自动收取当前选中的 Outlook 账号。',
+            title: state.text.autoStartTitle,
+            detail: state.text.autoStartDetail,
+            trailing: StatusPill(label: state.text.enabled),
+          ),
+          _SettingRow(
+            title: state.text.autoReceiveTitle,
+            detail: state.text.autoReceiveDetail,
             trailing: _AutoReceiveControls(state: state),
           ),
-          const _SettingRow(
-            title: '端口策略',
-            detail: '3000 被占用时改用下一个可用端口。',
-            trailing: StatusPill(label: '自动切换'),
+          _SettingRow(
+            title: state.text.portPolicyTitle,
+            detail: state.text.portPolicyDetail,
+            trailing: StatusPill(label: state.text.autoSwitch),
           ),
           _SettingRow(
-            title: '声音提示',
-            detail: '新邮件到达时播放提醒，可选择提示音。',
+            title: state.text.soundTitle,
+            detail: state.text.soundDetail,
             trailing: _SoundControls(state: state),
           ),
         ],
@@ -98,25 +99,82 @@ class _ServerPanel extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('本地 API 引擎', style: Theme.of(context).textTheme.titleMedium),
+          Text(
+            state.text.localApiEngine,
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
           const SizedBox(height: 14),
           StatusPill(
             label: state.serverUrl.replaceFirst('http://', ''),
             icon: Icons.cloud_done_outlined,
           ),
           const SizedBox(height: 16),
-          const Text(
-            'Flutter 只负责桌面 UI，收件、数据库和 Claw 适配继续由 Rust sidecar 处理。',
-            style: AppText.muted,
-          ),
+          Text(state.text.apiEngineDetail, style: AppText.muted),
           const SizedBox(height: 24),
           LinearButton(
-            label: '测试连接',
+            label: state.text.testConnection,
             icon: Icons.bolt_outlined,
             primary: true,
             onPressed: state.refresh,
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _LanguageControls extends StatelessWidget {
+  const _LanguageControls({required this.state});
+
+  final AppState state;
+
+  @override
+  Widget build(BuildContext context) {
+    return PopupMenuButton<AppLanguage>(
+      tooltip: state.text.languageTitle,
+      onSelected: state.setLanguage,
+      itemBuilder: (context) => [
+        for (final language in AppLanguage.values)
+          PopupMenuItem(
+            value: language,
+            child: Row(
+              children: [
+                SizedBox(
+                  width: 22,
+                  child: state.language == language
+                      ? const Icon(Icons.check, size: 17)
+                      : null,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(language.nativeName, style: AppText.bodyStrong),
+                ),
+              ],
+            ),
+          ),
+      ],
+      child: Container(
+        height: 42,
+        width: 174,
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        decoration: BoxDecoration(
+          color: LinearColors.surface,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: LinearColors.line),
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                state.language.nativeName,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppText.bodyStrong,
+              ),
+            ),
+            const Icon(Icons.expand_more, size: 18),
+          ],
+        ),
       ),
     );
   }
@@ -185,13 +243,16 @@ class _AutoReceiveControls extends StatelessWidget {
           const SizedBox(width: 8),
           PopupMenuButton<int>(
             enabled: state.autoReceiveEnabled,
-            tooltip: '自动接收间隔',
+            tooltip: state.text.autoReceiveInterval,
             onSelected: state.setAutoReceiveMinutes,
             itemBuilder: (context) => [
               for (final minute in _minutes)
                 PopupMenuItem(
                   value: minute,
-                  child: Text('$minute 分钟', style: AppText.bodyStrong),
+                  child: Text(
+                    state.text.minutes(minute),
+                    style: AppText.bodyStrong,
+                  ),
                 ),
             ],
             child: Container(
@@ -209,7 +270,7 @@ class _AutoReceiveControls extends StatelessWidget {
                 children: [
                   Expanded(
                     child: Text(
-                      '${state.autoReceiveMinutes} 分钟',
+                      state.text.minutes(state.autoReceiveMinutes),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: AppText.bodyStrong,
@@ -243,7 +304,7 @@ class _SoundControls extends StatelessWidget {
           Expanded(
             child: PopupMenuButton<String>(
               enabled: state.soundEnabled,
-              tooltip: '选择提示音',
+              tooltip: state.text.selectSound,
               onSelected: state.setSoundTone,
               itemBuilder: (context) => [
                 for (final option in SoundService.options)
@@ -252,9 +313,15 @@ class _SoundControls extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(option.label, style: AppText.bodyStrong),
+                        Text(
+                          state.text.soundLabel(option.value),
+                          style: AppText.bodyStrong,
+                        ),
                         const SizedBox(height: 2),
-                        Text(option.description, style: AppText.caption),
+                        Text(
+                          state.text.soundDescription(option.value),
+                          style: AppText.caption,
+                        ),
                       ],
                     ),
                   ),
@@ -273,7 +340,7 @@ class _SoundControls extends StatelessWidget {
                   children: [
                     Expanded(
                       child: Text(
-                        current.label,
+                        state.text.soundLabel(current.value),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: AppText.bodyStrong,
@@ -287,7 +354,7 @@ class _SoundControls extends StatelessWidget {
           ),
           const SizedBox(width: 8),
           IconButton(
-            tooltip: '试听',
+            tooltip: state.text.preview,
             onPressed: state.soundEnabled ? state.previewSound : null,
             icon: const Icon(Icons.play_arrow_rounded),
           ),

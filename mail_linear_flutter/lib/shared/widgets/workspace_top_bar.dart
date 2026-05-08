@@ -26,7 +26,7 @@ class WorkspaceTopBar extends StatelessWidget {
                 _PageGlyph(icon: _pageIcon(state.page)),
                 const SizedBox(width: 14),
               ],
-              Expanded(child: _TitleBlock(page: state.page)),
+              Expanded(child: _TitleBlock(state: state)),
               const SizedBox(width: 12),
               Flexible(
                 flex: isTight ? 0 : 1,
@@ -93,8 +93,8 @@ class _HeaderTools extends StatelessWidget {
 }
 
 class _TitleBlock extends StatelessWidget {
-  const _TitleBlock({required this.page});
-  final AppPage page;
+  const _TitleBlock({required this.state});
+  final AppState state;
 
   @override
   Widget build(BuildContext context) {
@@ -114,20 +114,20 @@ class _TitleBlock extends StatelessWidget {
     );
   }
 
-  String get _title => switch (page) {
-    AppPage.dashboard => '工作台',
-    AppPage.accounts => '账号',
-    AppPage.mail => '邮件',
-    AppPage.claw => 'Claw 设置',
-    AppPage.settings => '设置',
+  String get _title => switch (state.page) {
+    AppPage.dashboard => state.text.dashboard,
+    AppPage.accounts => state.text.accounts,
+    AppPage.mail => state.text.mail,
+    AppPage.claw => state.text.clawSettings,
+    AppPage.settings => state.text.settings,
   };
 
-  String get _subtitle => switch (page) {
-    AppPage.dashboard => '收件、状态和最近动态集中处理。',
-    AppPage.accounts => '令牌账号、标记和分组管理。',
-    AppPage.mail => '缓存阅读、验证码识别和复制。',
-    AppPage.claw => 'ClawEmail 绑定与子邮箱同步。',
-    AppPage.settings => '端口、启动、声音和语言偏好。',
+  String get _subtitle => switch (state.page) {
+    AppPage.dashboard => state.text.dashboardSubtitle,
+    AppPage.accounts => state.text.accountsSubtitle,
+    AppPage.mail => state.text.mailSubtitle,
+    AppPage.claw => state.text.clawSubtitle,
+    AppPage.settings => state.text.settingsSubtitle,
   };
 }
 
@@ -189,33 +189,33 @@ class _ActionSpec {
       AppPage.dashboard => _ActionSpec(
         label: state.mode == WorkMode.claw
             ? state.fetching
-                  ? '收取中'
-                  : 'Claw 收件'
+                  ? state.text.fetching
+                  : state.text.clawFetch
             : state.fetching
-            ? '收取中'
-            : '开始收取',
+            ? state.text.fetching
+            : state.text.startFetch,
         icon: Icons.sync,
         primary: true,
         onTap: state.fetching || !canReceive ? null : state.fetchSelectedMail,
       ),
       AppPage.accounts => _ActionSpec(
-        label: '刷新账号',
+        label: state.text.refreshAccounts,
         icon: Icons.refresh,
         onTap: state.refresh,
       ),
       AppPage.mail => _ActionSpec(
-        label: state.fetching ? '同步中' : '收取最新',
+        label: state.fetching ? state.text.syncing : state.text.fetchLatest,
         icon: Icons.mark_email_unread_outlined,
         primary: true,
         onTap: state.fetching || !canReceive ? null : state.fetchSelectedMail,
       ),
       AppPage.claw => _ActionSpec(
-        label: '同步 Claw',
+        label: state.text.syncClaw,
         icon: Icons.sync_alt,
         onTap: state.refresh,
       ),
       AppPage.settings => _ActionSpec(
-        label: '测试连接',
+        label: state.text.testConnection,
         icon: Icons.cable_outlined,
         onTap: state.refresh,
       ),

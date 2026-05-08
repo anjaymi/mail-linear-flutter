@@ -39,6 +39,11 @@ class AppPreferences {
     return data['soundTone']?.toString() ?? 'mail';
   }
 
+  Future<String> loadLanguageCode() async {
+    final data = await _read();
+    return data['languageCode']?.toString() ?? 'zh-Hans';
+  }
+
   Future<void> saveSoundEnabled(bool enabled) async {
     final data = await _read()
       ..['soundEnabled'] = enabled;
@@ -50,6 +55,14 @@ class AppPreferences {
   Future<void> saveSoundTone(String tone) async {
     final data = await _read()
       ..['soundTone'] = tone;
+    final file = _file();
+    await file.parent.create(recursive: true);
+    await file.writeAsString(jsonEncode(data));
+  }
+
+  Future<void> saveLanguageCode(String code) async {
+    final data = await _read()
+      ..['languageCode'] = code;
     final file = _file();
     await file.parent.create(recursive: true);
     await file.writeAsString(jsonEncode(data));

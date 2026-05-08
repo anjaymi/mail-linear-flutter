@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 
 import '../core/api/local_api_controller.dart';
 import '../core/api/mail_api.dart';
+import '../core/localization/app_localizations.dart';
 import '../core/models/dashboard_stats.dart';
 import '../core/models/mail_account.dart';
 import '../core/models/mail_item.dart';
@@ -40,12 +41,15 @@ class AppState extends ChangeNotifier {
   String soundTone = 'mail';
   bool autoReceiveEnabled = false;
   int autoReceiveMinutes = 5;
+  AppLanguage language = AppLanguage.zhHans;
+  AppStrings get text => AppStrings.of(language);
   Timer? _autoReceiveTimer;
 
   Future<void> boot() async {
     loading = true;
     error = '';
-    lifecycle = '正在启动本地 API';
+    language = AppLanguage.fromCode(await _prefs.loadLanguageCode());
+    lifecycle = text.bootingApi;
     notifyListeners();
     try {
       autoReceiveEnabled = await _prefs.loadAutoReceiveEnabled();
@@ -55,7 +59,7 @@ class AppState extends ChangeNotifier {
       serverUrl = await _controller.start();
       _api = MailApi(serverUrl);
       loading = false;
-      lifecycle = '正在载入账号';
+      lifecycle = text.loadingAccounts;
       notifyListeners();
       await refresh();
       _syncAutoReceiveTimer();
@@ -63,7 +67,7 @@ class AppState extends ChangeNotifier {
       error = ex.toString();
       loading = false;
     } finally {
-      lifecycle = error.isEmpty ? '就绪' : '需要处理';
+      lifecycle = error.isEmpty ? text.ready : text.needsAttention;
       notifyListeners();
     }
   }
@@ -71,7 +75,7 @@ class AppState extends ChangeNotifier {
   Future<void> refresh({bool loadSelectedMail = false}) async {
     final api = _requireApi();
     error = '';
-    lifecycle = '正在刷新数据';
+    lifecycle = text.refreshingData;
     notifyListeners();
     try {
       if (mode == WorkMode.claw) {
@@ -104,10 +108,10 @@ class AppState extends ChangeNotifier {
           await loadCachedClawMails(selectedClawMailbox!);
         }
       }
-      lifecycle = '就绪';
+      lifecycle = text.ready;
     } catch (ex) {
       error = ex.toString();
-      lifecycle = '刷新失败';
+      lifecycle = text.refreshFailed;
     }
     notifyListeners();
   }
@@ -146,7 +150,7 @@ class AppState extends ChangeNotifier {
     if (account == null) return;
     fetching = true;
     error = '';
-    lifecycle = '正在收取邮件';
+    lifecycle = text.fetchingMail;
     notifyListeners();
     try {
       final result = await _requireApi().fetchMails(account.id);
@@ -157,10 +161,10 @@ class AppState extends ChangeNotifier {
       mailSource = result.sourceLabel;
       mailWarning = result.warning;
       await _playMailSoundIfNeeded(mails.isNotEmpty);
-      lifecycle = mails.isEmpty ? '无新邮件' : '收取完成';
+      lifecycle = mails.isEmpty ? text.noNewMail : text.fetchDone;
     } catch (ex) {
       error = ex.toString();
-      lifecycle = '收取失败';
+      lifecycle = text.fetchFailed;
     } finally {
       fetching = false;
       notifyListeners();
@@ -172,7 +176,7 @@ class AppState extends ChangeNotifier {
     if (targets.isEmpty) return;
     fetching = true;
     error = '';
-    lifecycle = '正在批量收取';
+    lifecycle = text.batchFetching;
     notifyListeners();
     try {
       for (final account in targets) {
@@ -188,10 +192,10 @@ class AppState extends ChangeNotifier {
       }
       stats = await _requireApi().dashboard();
       page = AppPage.mail;
-      lifecycle = '批量收取完成';
+      lifecycle = text.batchFetchDone;
     } catch (ex) {
       error = ex.toString();
-      lifecycle = '批量收取失败';
+      lifecycle = text.batchFetchFailed;
     } finally {
       fetching = false;
       notifyListeners();
@@ -205,7 +209,7 @@ class AppState extends ChangeNotifier {
     if (email.isEmpty) return;
     fetching = true;
     error = '';
-    lifecycle = '正在收取 Claw 邮件';
+    lifecycle = text.fetchingClawMail;
     notifyListeners();
     try {
       final result = await _requireApi().clawMails(mailbox: email, sync: true);
@@ -216,10 +220,10 @@ class AppState extends ChangeNotifier {
       mailWarning = result.warning;
       if (openMail) page = AppPage.mail;
       await _playMailSoundIfNeeded(mails.isNotEmpty);
-      lifecycle = mails.isEmpty ? 'Claw 无新邮件' : 'Claw 收取完成';
+      lifecycle = mails.isEmpty ? text.clawNoNewMail : text.clawFetchDone;
     } catch (ex) {
       error = ex.toString();
-      lifecycle = 'Claw 收取失败';
+      lifecycle = text.clawFetchFailed;
     } finally {
       fetching = false;
       notifyListeners();
@@ -349,14 +353,14 @@ class AppState extends ChangeNotifier {
       selectedMail = null;
     }
     stats = await _requireApi().dashboard();
-    lifecycle = '已删除 $deleted 个账号';
+    lifecycle = text.deletedAccounts(deleted);
     notifyListeners();
     return deleted;
   }
 
   Future<String> importAccounts(String content) async {
     error = '';
-    lifecycle = '正在导入账号';
+    lifecycle = text.importingAccounts;
     notifyListeners();
     try {
       final result = await _requireApi().importAccounts(content);
@@ -364,11 +368,11 @@ class AppState extends ChangeNotifier {
       final imported = (result['imported'] as num?)?.toInt() ?? 0;
       final skipped = (result['skipped'] as num?)?.toInt() ?? 0;
       final errors = (result['errors'] as List? ?? []).length;
-      lifecycle = '导入完成';
-      return '导入 $imported 个，跳过 $skipped 个，错误 $errors 个';
+      lifecycle = text.importDone;
+      return text.importResult(imported, skipped, errors);
     } catch (ex) {
       error = ex.toString();
-      lifecycle = '导入失败';
+      lifecycle = text.importFailed;
       notifyListeners();
       rethrow;
     }
@@ -383,14 +387,22 @@ class AppState extends ChangeNotifier {
       selectedMail = null;
     }
     stats = await _requireApi().dashboard();
-    lifecycle = '账号已删除';
+    lifecycle = text.accountDeleted;
     notifyListeners();
   }
 
   Future<void> setAccountMarker(int id, String color) async {
     await _requireApi().setAccountMarker(id, color);
     await refresh();
-    lifecycle = '标记已更新';
+    lifecycle = text.markerUpdated;
+    notifyListeners();
+  }
+
+  Future<void> setLanguage(AppLanguage next) async {
+    if (language == next) return;
+    language = next;
+    await _prefs.saveLanguageCode(next.code);
+    lifecycle = text.ready;
     notifyListeners();
   }
 
@@ -496,7 +508,7 @@ class AppState extends ChangeNotifier {
 
   MailApi _requireApi() {
     final api = _api;
-    if (api == null) throw Exception('本地 API 未启动。');
+    if (api == null) throw Exception(text.localApiNotStarted);
     return api;
   }
 
