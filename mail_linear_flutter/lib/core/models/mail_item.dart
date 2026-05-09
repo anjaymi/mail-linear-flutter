@@ -6,6 +6,7 @@ class MailItem {
     required this.sender,
     required this.senderName,
     required this.mailboxEmail,
+    required this.mailbox,
     required this.preview,
     required this.htmlContent,
     required this.date,
@@ -17,6 +18,7 @@ class MailItem {
   final String sender;
   final String senderName;
   final String mailboxEmail;
+  final String mailbox;
   final String preview;
   final String htmlContent;
   final String date;
@@ -43,6 +45,7 @@ class MailItem {
       sender: _clean(json['sender']),
       senderName: _clean(json['sender_name']),
       mailboxEmail: _clean(json['mailbox_email']),
+      mailbox: _clean(json['mailbox']),
       preview: text.isNotEmpty ? text : _htmlToText(html),
       htmlContent: html,
       date: _clean(json['mail_date'] ?? json['received_at']),

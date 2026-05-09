@@ -54,7 +54,8 @@ class _MailList extends StatelessWidget {
               StatusPill(label: state.mailSource, color: LinearColors.blue),
               const SizedBox(width: 8),
               IconButton(
-                onPressed: state.refresh,
+                tooltip: state.text.ui('刷新当前邮箱缓存'),
+                onPressed: state.refreshCurrentMailbox,
                 icon: const Icon(Icons.refresh),
               ),
             ],
@@ -205,6 +206,8 @@ class _MailTile extends StatelessWidget {
             children: [
               Row(
                 children: [
+                  _MailboxBadge(mailbox: mail.mailbox),
+                  const SizedBox(width: 8),
                   Expanded(
                     child: Text(
                       mail.subject,
@@ -239,4 +242,33 @@ class _MailTile extends StatelessWidget {
 
   String _shortDate(String value) =>
       value.length > 10 ? value.substring(0, 10) : value;
+}
+
+class _MailboxBadge extends StatelessWidget {
+  const _MailboxBadge({required this.mailbox});
+
+  final String mailbox;
+
+  @override
+  Widget build(BuildContext context) {
+    final normalized = mailbox.toLowerCase();
+    final isJunk = normalized == 'junk';
+    final label = isJunk ? 'Junk' : 'Inbox';
+    final color = isJunk ? LinearColors.amber : LinearColors.green;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: .12),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: color.withValues(alpha: .24)),
+      ),
+      child: Text(
+        label,
+        style: AppText.caption.copyWith(
+          color: color,
+          fontWeight: FontWeight.w800,
+        ),
+      ),
+    );
+  }
 }

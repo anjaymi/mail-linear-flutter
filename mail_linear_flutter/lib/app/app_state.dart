@@ -45,6 +45,7 @@ class AppState extends ChangeNotifier {
   AppStrings get text => AppStrings.of(language);
   Timer? _autoReceiveTimer;
   bool _autoReceiveRunning = false;
+  int _autoReceiveCursor = 0;
   int _mailLoadEpoch = 0;
 
   Future<void> boot() async {
@@ -65,7 +66,6 @@ class AppState extends ChangeNotifier {
       notifyListeners();
       await refresh();
       _syncAutoReceiveTimer();
-      if (autoReceiveEnabled) unawaited(_autoReceiveTick());
     } catch (ex) {
       error = ex.toString();
       loading = false;
@@ -169,14 +169,20 @@ class AppState extends ChangeNotifier {
     try {
       final result = await _requireApi().fetchMails(account.id);
       if (!_isCurrentOutlookAccount(account.id)) return;
-      mails = result.mails;
+      final cached = await _requireApi().cachedMails(account.id);
+      if (!_isCurrentOutlookAccount(account.id)) return;
+      mails = cached.isEmpty ? result.mails : cached;
       selectedMail = mails.isEmpty ? null : mails.first;
       stats = await _requireApi().dashboard();
       if (openMail) page = AppPage.mail;
       mailSource = result.sourceLabel;
-      mailWarning = result.warning;
+      mailWarning = _mailFetchMessage(result);
       await _playMailSoundIfNeeded(result.newCount > 0);
-      lifecycle = mails.isEmpty ? text.noNewMail : text.fetchDone;
+      lifecycle = result.newCount > 0
+          ? text.ui('收取完成，新增 ${result.newCount} 封。')
+          : mails.isEmpty
+          ? text.noNewMail
+          : text.fetchDone;
     } catch (ex) {
       error = ex.toString();
       lifecycle = text.fetchFailed;
@@ -198,10 +204,11 @@ class AppState extends ChangeNotifier {
         final result = await _requireApi().fetchMails(account.id);
         if (account.id == targets.last.id) {
           selectedAccount = account;
-          mails = result.mails;
+          final cached = await _requireApi().cachedMails(account.id);
+          mails = cached.isEmpty ? result.mails : cached;
           selectedMail = mails.isEmpty ? null : mails.first;
           mailSource = result.sourceLabel;
-          mailWarning = result.warning;
+          mailWarning = _mailFetchMessage(result);
           await _playMailSoundIfNeeded(result.newCount > 0);
         }
       }
@@ -260,6 +267,25 @@ class AppState extends ChangeNotifier {
       error = ex.toString();
     }
     notifyListeners();
+  }
+
+  Future<void> refreshCurrentMailbox() async {
+    error = '';
+    if (mode == WorkMode.claw) {
+      final mailbox = selectedClawMailbox;
+      if (mailbox == null) {
+        await refresh(loadSelectedMail: true);
+        return;
+      }
+      await loadCachedClawMails(mailbox);
+      return;
+    }
+    final account = selectedAccount;
+    if (account == null) {
+      await refresh(loadSelectedMail: true);
+      return;
+    }
+    await loadCachedMails(account);
   }
 
   void setPage(AppPage next) {
@@ -451,7 +477,6 @@ class AppState extends ChangeNotifier {
     await _prefs.saveAutoReceiveEnabled(enabled);
     _syncAutoReceiveTimer();
     notifyListeners();
-    if (enabled) unawaited(_autoReceiveTick());
   }
 
   Future<void> setAutoReceiveMinutes(int minutes) async {
@@ -499,8 +524,8 @@ class AppState extends ChangeNotifier {
     if (selectedAccount == null) {
       await refresh();
     }
-    final targets = _autoReceiveTargets();
-    if (targets.isEmpty) return;
+    final target = _nextAutoReceiveTarget();
+    if (target == null) return;
 
     lifecycle = text.ui('自动接收中');
     notifyListeners();
@@ -510,24 +535,28 @@ class AppState extends ChangeNotifier {
     var failed = 0;
     MailFetchResult? selectedResult;
 
-    for (final account in targets) {
-      try {
-        final result = await _requireApi().fetchMails(account.id);
-        checked += 1;
-        newCount += result.newCount;
-        if (selectedAccount?.id == account.id) {
-          selectedResult = result;
-        }
-      } catch (_) {
-        failed += 1;
+    try {
+      final result = await _requireApi().fetchMails(target.id);
+      checked += 1;
+      newCount += result.newCount;
+      if (selectedAccount?.id == target.id) {
+        selectedResult = result;
       }
+    } catch (_) {
+      failed += 1;
     }
 
     if (selectedResult != null) {
-      mails = selectedResult.mails;
+      final account = selectedAccount;
+      if (account != null) {
+        final cached = await _requireApi().cachedMails(account.id);
+        mails = cached.isEmpty ? selectedResult.mails : cached;
+      } else {
+        mails = selectedResult.mails;
+      }
       selectedMail = mails.isEmpty ? null : mails.first;
       mailSource = selectedResult.sourceLabel;
-      mailWarning = selectedResult.warning;
+      mailWarning = _mailFetchMessage(selectedResult);
     }
 
     try {
@@ -543,23 +572,34 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
-  List<MailAccount> _autoReceiveTargets() {
+  MailAccount? _nextAutoReceiveTarget() {
     final active = accounts
         .where((account) => account.status.toLowerCase() != 'error')
         .toList();
+    if (active.isEmpty) return null;
     final selected = selectedAccount;
-    if (selected == null) return active;
-    active.sort((a, b) {
-      if (a.id == selected.id) return -1;
-      if (b.id == selected.id) return 1;
-      return b.id.compareTo(a.id);
-    });
-    return active;
+    if (selected != null && selected.status.toLowerCase() != 'error') {
+      return selected;
+    }
+    final target = active[_autoReceiveCursor % active.length];
+    _autoReceiveCursor += 1;
+    return target;
   }
 
   Future<void> _playMailSoundIfNeeded(bool hasMail) async {
     if (!soundEnabled || !hasMail) return;
     await SoundService.play(soundTone);
+  }
+
+  String _mailFetchMessage(MailFetchResult result) {
+    final parts = <String>[];
+    if (result.newCount > 0) {
+      parts.add(text.ui('已保存 ${result.newCount} 封新邮件。'));
+    }
+    if (result.warning.trim().isNotEmpty) {
+      parts.add(result.warning.trim());
+    }
+    return parts.join('\n');
   }
 
   MailAccount? _resolveSelectedAccount() {

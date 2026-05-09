@@ -1,9 +1,12 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'mail_api.dart';
 
 class LocalApiController {
   Process? _process;
+  StreamSubscription<List<int>>? _stdoutSubscription;
+  StreamSubscription<List<int>>? _stderrSubscription;
   int port = 3000;
   String get baseUrl => 'http://127.0.0.1:$port';
 
@@ -27,13 +30,31 @@ class LocalApiController {
       environment: env,
       mode: ProcessStartMode.detachedWithStdio,
     );
+    _drainNativeOutput(_process!);
     await _waitReady();
     return baseUrl;
   }
 
   Future<void> stop() async {
+    await _stdoutSubscription?.cancel();
+    await _stderrSubscription?.cancel();
+    _stdoutSubscription = null;
+    _stderrSubscription = null;
     _process?.kill();
     _process = null;
+  }
+
+  void _drainNativeOutput(Process process) {
+    _stdoutSubscription = process.stdout.listen(
+      (_) {},
+      onError: (_) {},
+      cancelOnError: false,
+    );
+    _stderrSubscription = process.stderr.listen(
+      (_) {},
+      onError: (_) {},
+      cancelOnError: false,
+    );
   }
 
   Future<void> _waitReady() async {
