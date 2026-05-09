@@ -45,6 +45,7 @@ class AppState extends ChangeNotifier {
   AppStrings get text => AppStrings.of(language);
   Timer? _autoReceiveTimer;
   bool _autoReceiveRunning = false;
+  int _mailLoadEpoch = 0;
 
   Future<void> boot() async {
     loading = true;
@@ -122,18 +123,29 @@ class AppState extends ChangeNotifier {
     MailAccount account, {
     bool openMail = true,
   }) async {
+    final epoch = ++_mailLoadEpoch;
+    mode = WorkMode.outlook;
     selectedAccount = account;
+    selectedClawMailbox = null;
+    mails = [];
+    selectedMail = null;
+    mailWarning = '';
+    mailSource = text.ui('缓存');
     if (openMail) page = AppPage.mail;
     notifyListeners();
-    await loadCachedMails(account);
+    await loadCachedMails(account, epoch: epoch);
   }
 
-  Future<void> loadCachedMails(MailAccount account) async {
+  Future<void> loadCachedMails(MailAccount account, {int? epoch}) async {
+    final requestEpoch = epoch ?? ++_mailLoadEpoch;
     error = '';
     try {
-      mails = await _requireApi().cachedMails(account.id);
-      selectedMail = mails.isEmpty ? null : mails.first;
+      final cached = await _requireApi().cachedMails(account.id);
+      if (!_isCurrentOutlookAccount(account.id, requestEpoch)) return;
+      mails = cached;
+      selectedMail = cached.isEmpty ? null : cached.first;
     } catch (ex) {
+      if (!_isCurrentOutlookAccount(account.id, requestEpoch)) return;
       error = ex.toString();
     }
     notifyListeners();
@@ -156,6 +168,7 @@ class AppState extends ChangeNotifier {
     notifyListeners();
     try {
       final result = await _requireApi().fetchMails(account.id);
+      if (!_isCurrentOutlookAccount(account.id)) return;
       mails = result.mails;
       selectedMail = mails.isEmpty ? null : mails.first;
       stats = await _requireApi().dashboard();
@@ -596,6 +609,13 @@ class AppState extends ChangeNotifier {
       if (account.id == id) return account;
     }
     return null;
+  }
+
+  bool _isCurrentOutlookAccount(int accountId, [int? epoch]) {
+    if (mode != WorkMode.outlook || selectedAccount?.id != accountId) {
+      return false;
+    }
+    return epoch == null || epoch == _mailLoadEpoch;
   }
 
   MailApi _requireApi() {

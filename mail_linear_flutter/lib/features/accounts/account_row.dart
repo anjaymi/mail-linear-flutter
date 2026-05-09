@@ -99,7 +99,7 @@ class AccountRow extends StatelessWidget {
                       icon: Icons.copy,
                     ),
                     _RowIconButton(
-                      tooltip: state.text.ui('收取'),
+                      tooltip: state.text.ui('打开该账号邮件'),
                       onPressed: onTap,
                       icon: Icons.mail_outline,
                     ),
