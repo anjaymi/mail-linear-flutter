@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../app/app_state.dart';
+import '../../core/motion/motion_tokens.dart';
 import '../../core/theme/app_theme.dart';
 import '../../shared/widgets/action_button.dart';
 
@@ -27,25 +28,33 @@ class EmptyMailState extends StatelessWidget {
             color: LinearColors.faint,
           ),
           const SizedBox(height: 12),
-          Text(
-            hasMailbox
-                ? state.text.ui('暂无缓存邮件')
-                : state.mode == WorkMode.claw
-                ? state.text.ui('先选择一个 Claw 子邮箱')
-                : state.text.ui('先选择一个账号'),
-            style: AppText.bodyStrong,
+          AnimatedSwitcher(
+            duration: MotionTokens.duration(context, MotionTokens.normal),
+            child: Text(
+              hasMailbox
+                  ? state.text.ui('暂无缓存邮件')
+                  : state.mode == WorkMode.claw
+                  ? state.text.ui('先选择一个 Claw 子邮箱')
+                  : state.text.ui('先选择一个账号'),
+              key: ValueKey('${state.mode}-$hasMailbox-empty-title'),
+              style: AppText.bodyStrong,
+            ),
           ),
           const SizedBox(height: 8),
-          Text(
-            hasMailbox
-                ? state.mode == WorkMode.claw
-                      ? state.text.ui('点击收取后会从 Claw Coremail 拉取并写入本地缓存。')
-                      : state.text.ui('点击收取后会显示 Graph / IMAP / 缓存来源。')
-                : state.mode == WorkMode.claw
-                ? state.text.ui('到 Claw 账号页选择子邮箱后再读取邮件。')
-                : state.text.ui('到账号页选择邮箱后再读取邮件。'),
-            textAlign: TextAlign.center,
-            style: AppText.muted,
+          AnimatedSwitcher(
+            duration: MotionTokens.duration(context, MotionTokens.normal),
+            child: Text(
+              hasMailbox
+                  ? state.mode == WorkMode.claw
+                        ? state.text.ui('点击收取后会从 Claw Coremail 拉取并写入本地缓存。')
+                        : state.text.ui('点击收取后会显示 Graph / IMAP / 缓存来源。')
+                  : state.mode == WorkMode.claw
+                  ? state.text.ui('到 Claw 账号页选择子邮箱后再读取邮件。')
+                  : state.text.ui('到账号页选择邮箱后再读取邮件。'),
+              key: ValueKey('${state.mode}-$hasMailbox-empty-body'),
+              textAlign: TextAlign.center,
+              style: AppText.muted,
+            ),
           ),
           if (hasMailbox) ...[
             const SizedBox(height: 16),
@@ -55,6 +64,7 @@ class EmptyMailState extends StatelessWidget {
                   : state.text.ui('立即收取'),
               icon: Icons.sync,
               primary: true,
+              busy: state.fetching,
               onPressed: state.fetching ? null : state.fetchSelectedMail,
             ),
           ],
@@ -71,7 +81,9 @@ class MailNotice extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return AnimatedContainer(
+      duration: MotionTokens.duration(context, MotionTokens.normal),
+      curve: MotionTokens.easeOut,
       width: double.infinity,
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(

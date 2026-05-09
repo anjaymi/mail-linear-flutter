@@ -21,6 +21,16 @@ class MailItem {
   final String htmlContent;
   final String date;
 
+  String get bodyText {
+    if (htmlContent.isNotEmpty) {
+      final fromHtml = _htmlToText(htmlContent);
+      if (fromHtml.isNotEmpty) return fromHtml;
+    }
+    return preview;
+  }
+
+  bool get hasBody => bodyText.trim().isNotEmpty;
+
   factory MailItem.fromJson(Map<String, dynamic> json) {
     final text = _clean(json['text_content']);
     final html = _clean(json['html_content']);

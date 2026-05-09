@@ -2,11 +2,14 @@ import 'package:flutter/material.dart';
 
 import '../../app/app_state.dart';
 import '../../core/models/mail_item.dart';
+import '../../core/motion/motion_tokens.dart';
 import '../../core/theme/app_theme.dart';
 import '../../shared/widgets/action_button.dart';
+import '../../shared/widgets/motion_widgets.dart';
 import '../../shared/widgets/status_pill.dart';
 import 'mail_code_rail.dart';
 import 'mail_empty_state.dart';
+import 'mail_reader.dart';
 
 class MailPage extends StatelessWidget {
   const MailPage({super.key, required this.state});
@@ -18,7 +21,7 @@ class MailPage extends StatelessWidget {
       children: [
         SizedBox(width: 360, child: _MailList(state: state)),
         const SizedBox(width: 18),
-        Expanded(child: _Reader(state: state)),
+        Expanded(child: MailReader(state: state)),
         const SizedBox(width: 18),
         SizedBox(width: 310, child: MailCodeRail(state: state)),
       ],
@@ -126,6 +129,7 @@ class _FetchBar extends StatelessWidget {
           label: state.fetching ? state.text.fetching : state.text.ui('收取'),
           icon: Icons.sync,
           primary: true,
+          busy: state.fetching,
           onPressed: state.fetching ? null : state.fetchSelectedMail,
         ),
       ],
@@ -179,51 +183,55 @@ class _MailTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      borderRadius: BorderRadius.circular(18),
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 140),
-        margin: const EdgeInsets.only(bottom: 8),
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: active ? const Color(0xffedf4ff) : Colors.transparent,
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(
-            color: active ? const Color(0xffb7d1ff) : LinearColors.line,
+    return MotionTapSurface(
+      lift: false,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(18),
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: MotionTokens.duration(context, MotionTokens.normal),
+          curve: MotionTokens.easeOut,
+          margin: const EdgeInsets.only(bottom: 8),
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: active ? const Color(0xffedf4ff) : Colors.transparent,
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(
+              color: active ? const Color(0xffb7d1ff) : LinearColors.line,
+            ),
           ),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    mail.subject,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: AppText.itemTitle,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      mail.subject,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppText.itemTitle,
+                    ),
                   ),
-                ),
-                Text(_shortDate(mail.date), style: AppText.caption),
-              ],
-            ),
-            const SizedBox(height: 6),
-            Text(
-              mail.senderName.isEmpty ? mail.sender : mail.senderName,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: AppText.muted,
-            ),
-            const SizedBox(height: 6),
-            Text(
-              mail.preview,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: AppText.caption,
-            ),
-          ],
+                  Text(_shortDate(mail.date), style: AppText.caption),
+                ],
+              ),
+              const SizedBox(height: 6),
+              Text(
+                mail.senderName.isEmpty ? mail.sender : mail.senderName,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppText.muted,
+              ),
+              const SizedBox(height: 6),
+              Text(
+                mail.preview,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: AppText.caption,
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -231,47 +239,4 @@ class _MailTile extends StatelessWidget {
 
   String _shortDate(String value) =>
       value.length > 10 ? value.substring(0, 10) : value;
-}
-
-class _Reader extends StatelessWidget {
-  const _Reader({required this.state});
-  final AppState state;
-
-  @override
-  Widget build(BuildContext context) {
-    final mail = state.selectedMail;
-    return Container(
-      padding: const EdgeInsets.all(30),
-      decoration: AppSurfaces.panel(radius: 28),
-      child: mail == null
-          ? Center(child: Text(state.text.ui('选择一封邮件开始阅读')))
-          : Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                StatusPill(label: state.text.ui('收件箱')),
-                const SizedBox(height: 18),
-                Text(
-                  mail.subject,
-                  style: Theme.of(context).textTheme.headlineLarge,
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  '${mail.senderName}  ${mail.sender}',
-                  style: AppText.muted,
-                ),
-                const Divider(height: 36),
-                Expanded(
-                  child: SingleChildScrollView(
-                    child: Text(
-                      mail.preview.isEmpty
-                          ? state.text.ui('无正文预览。')
-                          : mail.preview,
-                      style: AppText.body.copyWith(fontSize: 16, height: 1.7),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-    );
-  }
 }

@@ -1,11 +1,12 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+use chrono::{DateTime, NaiveDateTime, TimeZone, Utc};
 use mailparse::MailHeaderMap;
 use reqwest::header::{ACCEPT, AUTHORIZATION, CONTENT_TYPE, COOKIE, REFERER, SET_COOKIE};
 use rusqlite::{params, Connection, OptionalExtension};
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::env;
 use std::fs;
 use std::io::{BufRead, BufReader, Read, Write};
@@ -143,6 +144,7 @@ fn run_migrations(conn: &Connection) -> rusqlite::Result<()> {
           mail_id TEXT DEFAULT '',
           sender TEXT DEFAULT '',
           sender_name TEXT DEFAULT '',
+          recipients TEXT DEFAULT '',
           subject TEXT DEFAULT '',
           text_content TEXT DEFAULT '',
           html_content TEXT DEFAULT '',
@@ -228,6 +230,7 @@ fn run_migrations(conn: &Connection) -> rusqlite::Result<()> {
     add_column_if_missing(conn, "accounts", "token_refreshed_at", "DATETIME")?;
     add_column_if_missing(conn, "accounts", "remark", "TEXT DEFAULT ''")?;
     add_column_if_missing(conn, "accounts", "marker_color", "TEXT DEFAULT ''")?;
+    add_column_if_missing(conn, "mail_cache", "recipients", "TEXT DEFAULT ''")?;
     let _ = conn.execute_batch(
         r#"
         CREATE UNIQUE INDEX IF NOT EXISTS idx_mail_cache_identity
@@ -235,7 +238,97 @@ fn run_migrations(conn: &Connection) -> rusqlite::Result<()> {
           WHERE mail_id IS NOT NULL AND mail_id != '';
         "#,
     );
+    normalize_existing_mail_dates(conn)?;
     Ok(())
+}
+
+fn normalize_existing_mail_dates(conn: &Connection) -> rusqlite::Result<()> {
+    let mut rows = Vec::new();
+    {
+        let mut stmt =
+            conn.prepare("SELECT id, mail_date FROM mail_cache WHERE mail_date IS NOT NULL")?;
+        let iter = stmt.query_map([], |row| {
+            Ok((row.get::<_, i64>(0)?, row.get::<_, Option<String>>(1)?))
+        })?;
+        for row in iter {
+            rows.push(row?);
+        }
+    }
+    for (id, value) in rows {
+        let Some(value) = value else { continue };
+        let Some(normalized) = normalize_mail_date(&value) else {
+            continue;
+        };
+        if normalized != value {
+            conn.execute(
+                "UPDATE mail_cache SET mail_date = ? WHERE id = ?",
+                params![normalized, id],
+            )?;
+        }
+    }
+
+    let mut claw_rows = Vec::new();
+    {
+        let mut stmt = conn
+            .prepare("SELECT id, received_at FROM claw_mail_cache WHERE received_at IS NOT NULL")?;
+        let iter = stmt.query_map([], |row| {
+            Ok((row.get::<_, i64>(0)?, row.get::<_, Option<String>>(1)?))
+        })?;
+        for row in iter {
+            claw_rows.push(row?);
+        }
+    }
+    for (id, value) in claw_rows {
+        let Some(value) = value else { continue };
+        let Some(normalized) = normalize_mail_date(&value) else {
+            continue;
+        };
+        if normalized != value {
+            conn.execute(
+                "UPDATE claw_mail_cache SET received_at = ? WHERE id = ?",
+                params![normalized, id],
+            )?;
+        }
+    }
+    Ok(())
+}
+
+fn normalize_mail_date(value: &str) -> Option<String> {
+    let text = value.trim();
+    if text.is_empty() {
+        return None;
+    }
+    if let Ok(date) = DateTime::parse_from_rfc3339(text) {
+        return Some(format_utc_date(date.with_timezone(&Utc)));
+    }
+    let cleaned = text
+        .replace(" (UTC)", "")
+        .replace(" (GMT)", "")
+        .replace(" UTC", " +0000")
+        .replace(" GMT", " +0000");
+    if let Ok(date) = DateTime::parse_from_rfc2822(&cleaned) {
+        return Some(format_utc_date(date.with_timezone(&Utc)));
+    }
+    for pattern in [
+        "%a, %-d %b %Y %H:%M:%S %z",
+        "%a, %e %b %Y %H:%M:%S %z",
+        "%a, %d %b %Y %H:%M:%S %z",
+        "%-d %b %Y %H:%M:%S %z",
+        "%e %b %Y %H:%M:%S %z",
+        "%d %b %Y %H:%M:%S %z",
+    ] {
+        if let Ok(date) = DateTime::parse_from_str(&cleaned, pattern) {
+            return Some(format_utc_date(date.with_timezone(&Utc)));
+        }
+    }
+    if let Ok(date) = NaiveDateTime::parse_from_str(text, "%Y-%m-%d %H:%M:%S") {
+        return Some(format_utc_date(Utc.from_utc_datetime(&date)));
+    }
+    None
+}
+
+fn format_utc_date(date: DateTime<Utc>) -> String {
+    date.format("%Y-%m-%dT%H:%M:%S%.3fZ").to_string()
 }
 
 fn add_column_if_missing(
@@ -925,16 +1018,31 @@ fn cached_mails(conn: &Connection, query: &HashMap<String, String>) -> Result<Va
     let page = parse_query_i64(query, "page", 1).max(1);
     let page_size = parse_query_i64(query, "pageSize", 50).clamp(1, 500);
     let offset = (page - 1) * page_size;
-    let total = count_i64(
-        conn,
-        "SELECT COUNT(*) FROM mail_cache WHERE account_id = ? AND mailbox = ?",
-        &[&account_id, &mailbox],
-    )?;
-    let mails = query_mails(
-        conn,
-        "SELECT * FROM mail_cache WHERE account_id = ? AND mailbox = ? ORDER BY mail_date DESC LIMIT ? OFFSET ?",
-        &[&account_id, &mailbox, &page_size, &offset],
-    )?;
+    let (total, mails) = if mailbox.eq_ignore_ascii_case("all") {
+        let total = count_i64(
+            conn,
+            "SELECT COUNT(*) FROM mail_cache WHERE account_id = ?",
+            &[&account_id],
+        )?;
+        let mails = query_mails(
+            conn,
+            "SELECT * FROM mail_cache WHERE account_id = ? ORDER BY COALESCE(NULLIF(mail_date, ''), cached_at) DESC LIMIT ? OFFSET ?",
+            &[&account_id, &page_size, &offset],
+        )?;
+        (total, mails)
+    } else {
+        let total = count_i64(
+            conn,
+            "SELECT COUNT(*) FROM mail_cache WHERE account_id = ? AND mailbox = ?",
+            &[&account_id, &mailbox],
+        )?;
+        let mails = query_mails(
+            conn,
+            "SELECT * FROM mail_cache WHERE account_id = ? AND mailbox = ? ORDER BY COALESCE(NULLIF(mail_date, ''), cached_at) DESC LIMIT ? OFFSET ?",
+            &[&account_id, &mailbox, &page_size, &offset],
+        )?;
+        (total, mails)
+    };
     Ok(json!({ "list": mails, "total": total, "page": page, "pageSize": page_size }))
 }
 
@@ -957,6 +1065,19 @@ fn fetch_mails_live(conn: &Connection, body: Value) -> Result<Value, ApiError> {
         .unwrap_or(50)
         .clamp(1, 200);
 
+    if mailbox.eq_ignore_ascii_case("all") {
+        return fetch_outlook_mailboxes(conn, account_id, &["INBOX", "Junk"], top);
+    }
+
+    fetch_one_mailbox_live(conn, account_id, mailbox, top)
+}
+
+fn fetch_one_mailbox_live(
+    conn: &Connection,
+    account_id: i64,
+    mailbox: &str,
+    top: i64,
+) -> Result<Value, ApiError> {
     match fetch_graph_for_account(conn, account_id, mailbox, top) {
         Ok(result) => Ok(result),
         Err(graph_err) => match fetch_imap_for_account(conn, account_id, mailbox, top) {
@@ -987,7 +1108,7 @@ fn fetch_mails_live(conn: &Connection, body: Value) -> Result<Value, ApiError> {
             Err(imap_err) => {
                 let cached = query_mails(
                 conn,
-                "SELECT * FROM mail_cache WHERE account_id = ? AND mailbox = ? ORDER BY mail_date DESC LIMIT ?",
+                "SELECT * FROM mail_cache WHERE account_id = ? AND mailbox = ? ORDER BY COALESCE(NULLIF(mail_date, ''), cached_at) DESC LIMIT ?",
                 &[&account_id, &mailbox, &top],
             )?;
                 if !cached.is_empty() {
@@ -1016,6 +1137,93 @@ fn fetch_mails_live(conn: &Connection, body: Value) -> Result<Value, ApiError> {
             }
         },
     }
+}
+
+fn fetch_outlook_mailboxes(
+    conn: &Connection,
+    account_id: i64,
+    mailboxes: &[&str],
+    top: i64,
+) -> Result<Value, ApiError> {
+    let mut warnings = Vec::new();
+    let mut errors = Vec::new();
+    let mut saved_count = 0i64;
+    let mut success_count = 0usize;
+    let mut all_cached = true;
+
+    for mailbox in mailboxes {
+        match fetch_one_mailbox_live(conn, account_id, mailbox, top) {
+            Ok(result) => {
+                success_count += 1;
+                all_cached &= result
+                    .get("cached")
+                    .and_then(Value::as_bool)
+                    .unwrap_or(false);
+                saved_count += result
+                    .get("savedCount")
+                    .and_then(Value::as_i64)
+                    .unwrap_or(0);
+                for key in ["warning", "graphWarning"] {
+                    if let Some(warning) = result.get(key).and_then(Value::as_str) {
+                        if key == "warning" && is_identity_warning(warning) {
+                            continue;
+                        }
+                        push_unique_text(&mut warnings, warning);
+                    }
+                }
+            }
+            Err(err) => {
+                errors.push(format!("{mailbox}: {}", err.message));
+            }
+        }
+    }
+
+    if success_count == 0 {
+        return Err(ApiError::new(
+            500,
+            format!("Outlook 收件失败：{}", errors.join("；")),
+        ));
+    }
+
+    for error in errors {
+        push_unique_text(&mut warnings, &format!("部分文件夹收取失败：{error}"));
+    }
+
+    let mails = query_mails(
+        conn,
+        "SELECT * FROM mail_cache WHERE account_id = ? ORDER BY COALESCE(NULLIF(mail_date, ''), cached_at) DESC LIMIT ?",
+        &[&account_id, &top],
+    )?;
+    let total = count_i64(
+        conn,
+        "SELECT COUNT(*) FROM mail_cache WHERE account_id = ?",
+        &[&account_id],
+    )?;
+    if let Some(account) = load_account(conn, account_id)? {
+        if let Some(warning) = recipient_identity_warning(&account.email, &mails) {
+            push_unique_text(&mut warnings, &warning);
+        }
+    }
+
+    Ok(with_warning(
+        json!({
+            "mails": mails,
+            "total": total,
+            "protocol": "outlook",
+            "cached": all_cached,
+            "savedCount": saved_count,
+            "folders": mailboxes,
+        }),
+        if warnings.is_empty() {
+            None
+        } else {
+            Some(warnings.join("\n"))
+        },
+    ))
+}
+
+fn is_identity_warning(warning: &str) -> bool {
+    warning.trim_start().starts_with("账号身份可能不一致")
 }
 
 fn friendly_graph_warning(message: &str) -> String {
@@ -1055,14 +1263,17 @@ fn fetch_graph_for_account(
             ApiError::new(500, "Microsoft token response did not include access_token")
         })?;
     let mails = fetch_graph_mails(access_token, mailbox, top)?;
-    if !mails.is_empty() {
-        upsert_mails(conn, account_id, mailbox, &mails)?;
-    }
+    let identity_warning = recipient_identity_warning(&account.email, &mails);
+    let saved_count = if !mails.is_empty() {
+        upsert_mails(conn, account_id, mailbox, &mails)?
+    } else {
+        0
+    };
     conn.execute("UPDATE accounts SET last_synced_at = CURRENT_TIMESTAMP, status = 'active', updated_at = CURRENT_TIMESTAMP WHERE id = ?", [account_id])?;
 
     let cached_after_fetch = query_mails(
         conn,
-        "SELECT * FROM mail_cache WHERE account_id = ? AND mailbox = ? ORDER BY mail_date DESC LIMIT ?",
+        "SELECT * FROM mail_cache WHERE account_id = ? AND mailbox = ? ORDER BY COALESCE(NULLIF(mail_date, ''), cached_at) DESC LIMIT ?",
         &[&account_id, &mailbox, &top],
     )?;
     let total_after_fetch = count_i64(
@@ -1072,14 +1283,16 @@ fn fetch_graph_for_account(
     )?;
 
     if mails.is_empty() && !cached_after_fetch.is_empty() {
-        return Ok(
-            json!({ "mails": cached_after_fetch, "total": total_after_fetch, "protocol": "graph", "cached": true }),
-        );
+        return Ok(with_warning(
+            json!({ "mails": cached_after_fetch, "total": total_after_fetch, "protocol": "graph", "cached": true, "savedCount": saved_count }),
+            identity_warning,
+        ));
     }
 
-    Ok(
-        json!({ "mails": cached_after_fetch, "total": total_after_fetch, "protocol": "graph", "cached": false }),
-    )
+    Ok(with_warning(
+        json!({ "mails": cached_after_fetch, "total": total_after_fetch, "protocol": "graph", "cached": false, "savedCount": saved_count }),
+        identity_warning,
+    ))
 }
 
 #[derive(Debug)]
@@ -1157,14 +1370,17 @@ fn fetch_imap_for_account(
     if let Some(err) = last_error {
         return Err(err);
     }
-    if !mails.is_empty() {
-        upsert_mails(conn, account_id, mailbox, &mails)?;
-    }
+    let identity_warning = recipient_identity_warning(&account.email, &mails);
+    let saved_count = if !mails.is_empty() {
+        upsert_mails(conn, account_id, mailbox, &mails)?
+    } else {
+        0
+    };
     conn.execute("UPDATE accounts SET last_synced_at = CURRENT_TIMESTAMP, status = 'active', updated_at = CURRENT_TIMESTAMP WHERE id = ?", [account_id])?;
 
     let cached_after_fetch = query_mails(
         conn,
-        "SELECT * FROM mail_cache WHERE account_id = ? AND mailbox = ? ORDER BY mail_date DESC LIMIT ?",
+        "SELECT * FROM mail_cache WHERE account_id = ? AND mailbox = ? ORDER BY COALESCE(NULLIF(mail_date, ''), cached_at) DESC LIMIT ?",
         &[&account_id, &mailbox, &top],
     )?;
     let total_after_fetch = count_i64(
@@ -1174,19 +1390,27 @@ fn fetch_imap_for_account(
     )?;
 
     if mails.is_empty() && !cached_after_fetch.is_empty() {
-        return Ok(json!({
-            "mails": cached_after_fetch,
-            "total": total_after_fetch,
-            "protocol": "imap",
-            "cached": true,
-            "login": used_login,
-            "warning": format!("IMAP 实时收件暂未返回新邮件，已显示 {used_login} 的本地缓存。")
-        }));
+        return Ok(with_warning(
+            json!({
+                "mails": cached_after_fetch,
+                "total": total_after_fetch,
+                "protocol": "imap",
+                "cached": true,
+                "login": used_login,
+                "savedCount": saved_count,
+            }),
+            identity_warning.or_else(|| {
+                Some(format!(
+                    "IMAP 实时收件暂未返回新邮件，已显示 {used_login} 的本地缓存。"
+                ))
+            }),
+        ));
     }
 
-    Ok(
-        json!({ "mails": cached_after_fetch, "total": total_after_fetch, "protocol": "imap", "cached": false, "login": used_login }),
-    )
+    Ok(with_warning(
+        json!({ "mails": cached_after_fetch, "total": total_after_fetch, "protocol": "imap", "cached": false, "login": used_login, "savedCount": saved_count }),
+        identity_warning,
+    ))
 }
 
 fn resolve_profile_email_for_imap(account: &AccountRecord) -> Result<String, ApiError> {
@@ -1444,6 +1668,7 @@ fn parse_imap_mail(email: &str, mailbox: &str, uid: u64, raw: &[u8]) -> Value {
                 .unwrap_or_default();
             let from = parsed.headers.get_first_value("From").unwrap_or_default();
             let date = parsed.headers.get_first_value("Date").unwrap_or_default();
+            let recipients = imap_recipient_headers(&parsed);
             let (mut text, html) = collect_mail_bodies(&parsed);
             if text.trim().is_empty() && !html.trim().is_empty() {
                 text = html_to_text(&html);
@@ -1452,6 +1677,7 @@ fn parse_imap_mail(email: &str, mailbox: &str, uid: u64, raw: &[u8]) -> Value {
                 "mail_id": format!("imap:{}:{}:{}", email.to_lowercase(), mailbox, uid),
                 "sender": extract_email_address(&from),
                 "sender_name": extract_sender_name(&from),
+                "recipients": recipients,
                 "subject": subject,
                 "text_content": text,
                 "html_content": html,
@@ -1462,12 +1688,32 @@ fn parse_imap_mail(email: &str, mailbox: &str, uid: u64, raw: &[u8]) -> Value {
             "mail_id": format!("imap:{}:{}:{}", email.to_lowercase(), mailbox, uid),
             "sender": "",
             "sender_name": "",
+            "recipients": "",
             "subject": "(无法解析邮件)",
             "text_content": String::from_utf8_lossy(raw).chars().take(2000).collect::<String>(),
             "html_content": "",
             "mail_date": "",
         }),
     }
+}
+
+fn imap_recipient_headers(mail: &mailparse::ParsedMail<'_>) -> String {
+    let mut addresses = Vec::new();
+    for header in [
+        "To",
+        "Cc",
+        "Delivered-To",
+        "X-Original-To",
+        "Envelope-To",
+        "Apparently-To",
+    ] {
+        if let Some(value) = mail.headers.get_first_value(header) {
+            for address in extract_email_addresses(&value) {
+                push_unique_email(&mut addresses, &address);
+            }
+        }
+    }
+    addresses.join(",")
 }
 
 fn collect_mail_bodies(mail: &mailparse::ParsedMail<'_>) -> (String, String) {
@@ -1565,10 +1811,47 @@ fn remove_html_block(input: &str, tag: &str) -> String {
 fn extract_email_address(from: &str) -> String {
     if let (Some(start), Some(end)) = (from.rfind('<'), from.rfind('>')) {
         if end > start {
-            return from[(start + 1)..end].trim().to_string();
+            return from[(start + 1)..end].trim().to_lowercase();
         }
     }
-    from.trim().trim_matches('"').to_string()
+    from.trim().trim_matches(['"', '\'']).to_lowercase()
+}
+
+fn extract_email_addresses(text: &str) -> Vec<String> {
+    let mut addresses = Vec::new();
+    for part in
+        text.split(|ch: char| matches!(ch, ',' | ';' | '\n' | '\r' | '\t' | '(' | ')' | '[' | ']'))
+    {
+        let address = extract_email_address(part);
+        if is_email(&address) {
+            push_unique_email(&mut addresses, &address);
+            continue;
+        }
+        for token in part.split_whitespace() {
+            let token = token.trim_matches(['<', '>', '"', '\'']);
+            if is_email(token) {
+                push_unique_email(&mut addresses, token);
+            }
+        }
+    }
+    addresses
+}
+
+fn push_unique_email(addresses: &mut Vec<String>, email: &str) {
+    let email = email
+        .trim()
+        .trim_matches(['<', '>', '"', '\''])
+        .to_lowercase();
+    if is_email(&email) && !addresses.iter().any(|item| item == &email) {
+        addresses.push(email);
+    }
+}
+
+fn push_unique_text(items: &mut Vec<String>, text: &str) {
+    let text = text.trim();
+    if !text.is_empty() && !items.iter().any(|item| item == text) {
+        items.push(text.to_string());
+    }
 }
 
 fn extract_sender_name(from: &str) -> String {
@@ -1624,8 +1907,9 @@ fn fetch_graph_mails(access_token: &str, mailbox: &str, top: i64) -> Result<Vec<
     } else {
         "inbox"
     };
-    let url =
-        format!("https://graph.microsoft.com/v1.0/me/mailFolders/{folder}/messages?$top={top}");
+    let url = format!(
+        "https://graph.microsoft.com/v1.0/me/mailFolders/{folder}/messages?%24top={top}&%24orderby=receivedDateTime%20desc&%24select=id,from,toRecipients,ccRecipients,bccRecipients,subject,bodyPreview,body,createdDateTime,receivedDateTime"
+    );
     let client = reqwest::blocking::Client::builder()
         .timeout(Duration::from_secs(45))
         .build()
@@ -1659,12 +1943,13 @@ fn fetch_graph_mails(access_token: &str, mailbox: &str, top: i64) -> Result<Vec<
                         "mail_id": item.get("id").and_then(Value::as_str).unwrap_or_default(),
                         "sender": from.and_then(|v| v.get("address")).and_then(Value::as_str).unwrap_or_default(),
                         "sender_name": from.and_then(|v| v.get("name")).and_then(Value::as_str).unwrap_or_default(),
+                        "recipients": graph_recipient_addresses(item),
                         "subject": item.get("subject").and_then(Value::as_str).unwrap_or_default(),
                         "text_content": item.get("bodyPreview").and_then(Value::as_str).unwrap_or_default(),
                         "html_content": item.get("body").and_then(|v| v.get("content")).and_then(Value::as_str).unwrap_or_default(),
                         "mail_date": item
-                            .get("createdDateTime")
-                            .or_else(|| item.get("receivedDateTime"))
+                            .get("receivedDateTime")
+                            .or_else(|| item.get("createdDateTime"))
                             .and_then(Value::as_str)
                             .unwrap_or_default(),
                     })
@@ -1675,65 +1960,240 @@ fn fetch_graph_mails(access_token: &str, mailbox: &str, top: i64) -> Result<Vec<
     Ok(mails)
 }
 
+fn graph_recipient_addresses(item: &Value) -> String {
+    let mut addresses = Vec::new();
+    for key in ["toRecipients", "ccRecipients", "bccRecipients"] {
+        if let Some(items) = item.get(key).and_then(Value::as_array) {
+            for recipient in items {
+                if let Some(address) = recipient
+                    .get("emailAddress")
+                    .and_then(|value| value.get("address"))
+                    .and_then(Value::as_str)
+                {
+                    push_unique_email(&mut addresses, address);
+                }
+            }
+        }
+    }
+    addresses.join(",")
+}
+
 fn upsert_mails(
     conn: &Connection,
     account_id: i64,
     mailbox: &str,
     mails: &[Value],
-) -> Result<(), ApiError> {
+) -> Result<usize, ApiError> {
+    let mut inserted_count = 0;
     for mail in mails {
-        let mail_id = mail
-            .get("mail_id")
-            .and_then(Value::as_str)
-            .unwrap_or("")
-            .trim();
-        let sender = mail.get("sender").and_then(Value::as_str).unwrap_or("");
-        let sender_name = mail
-            .get("sender_name")
-            .and_then(Value::as_str)
-            .unwrap_or("");
-        let subject = mail.get("subject").and_then(Value::as_str).unwrap_or("");
-        let text_content = mail
-            .get("text_content")
-            .and_then(Value::as_str)
-            .unwrap_or("");
-        let html_content = mail
-            .get("html_content")
-            .and_then(Value::as_str)
-            .unwrap_or("");
-        let mail_date = mail.get("mail_date").and_then(Value::as_str).unwrap_or("");
+        let target_ids = alias_target_account_ids(conn, account_id, mail)?;
+        for target_id in target_ids {
+            if upsert_mail_for_account(conn, target_id, mailbox, mail)? {
+                inserted_count += 1;
+            }
+        }
+    }
+    Ok(inserted_count)
+}
 
-        let existing = if mail_id.is_empty() {
-            None
-        } else {
-            conn.query_row(
+fn upsert_mail_for_account(
+    conn: &Connection,
+    account_id: i64,
+    mailbox: &str,
+    mail: &Value,
+) -> Result<bool, ApiError> {
+    let mail_id = mail
+        .get("mail_id")
+        .and_then(Value::as_str)
+        .unwrap_or("")
+        .trim();
+    let sender = mail.get("sender").and_then(Value::as_str).unwrap_or("");
+    let sender_name = mail
+        .get("sender_name")
+        .and_then(Value::as_str)
+        .unwrap_or("");
+    let recipients = mail.get("recipients").and_then(Value::as_str).unwrap_or("");
+    let subject = mail.get("subject").and_then(Value::as_str).unwrap_or("");
+    let text_content = mail
+        .get("text_content")
+        .and_then(Value::as_str)
+        .unwrap_or("");
+    let html_content = mail
+        .get("html_content")
+        .and_then(Value::as_str)
+        .unwrap_or("");
+    let mail_date_raw = mail.get("mail_date").and_then(Value::as_str).unwrap_or("");
+    let mail_date = normalize_mail_date(mail_date_raw).unwrap_or_else(|| mail_date_raw.to_string());
+
+    let existing = if mail_id.is_empty() {
+        None
+    } else {
+        conn.query_row(
                 "SELECT id FROM mail_cache WHERE account_id = ? AND mailbox = ? AND mail_id = ? LIMIT 1",
                 params![account_id, mailbox, mail_id],
                 |row| row.get::<_, i64>(0),
             )
             .optional()?
-        };
+    };
 
-        if let Some(id) = existing {
-            conn.execute(
+    if let Some(id) = existing {
+        conn.execute(
                 r#"
                 UPDATE mail_cache
-                SET sender = ?, sender_name = ?, subject = ?, text_content = ?, html_content = ?, mail_date = ?, cached_at = CURRENT_TIMESTAMP
+                SET sender = ?, sender_name = ?, recipients = ?, subject = ?, text_content = ?, html_content = ?, mail_date = ?, cached_at = CURRENT_TIMESTAMP
                 WHERE id = ?
                 "#,
-                params![sender, sender_name, subject, text_content, html_content, mail_date, id],
+                params![
+                    sender,
+                    sender_name,
+                    recipients,
+                    subject,
+                    text_content,
+                    html_content,
+                    mail_date,
+                    id
+                ],
             )?;
-        } else {
-            conn.execute(
+        Ok(false)
+    } else {
+        conn.execute(
                 r#"
-                INSERT INTO mail_cache (account_id, mailbox, mail_id, sender, sender_name, subject, text_content, html_content, mail_date)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO mail_cache (account_id, mailbox, mail_id, sender, sender_name, recipients, subject, text_content, html_content, mail_date)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 "#,
-                params![account_id, mailbox, mail_id, sender, sender_name, subject, text_content, html_content, mail_date],
+                params![
+                    account_id,
+                    mailbox,
+                    mail_id,
+                    sender,
+                    sender_name,
+                    recipients,
+                    subject,
+                    text_content,
+                    html_content,
+                    mail_date
+                ],
             )?;
+        Ok(true)
+    }
+}
+
+fn alias_target_account_ids(
+    conn: &Connection,
+    fallback_account_id: i64,
+    mail: &Value,
+) -> Result<Vec<i64>, ApiError> {
+    let recipients = mail.get("recipients").and_then(Value::as_str).unwrap_or("");
+    let recipient_keys = email_match_keys(recipients);
+    if recipient_keys.is_empty() {
+        return Ok(vec![fallback_account_id]);
+    }
+
+    let mut stmt = conn.prepare("SELECT id, email FROM accounts")?;
+    let rows = stmt.query_map([], |row| {
+        Ok((row.get::<_, i64>(0)?, row.get::<_, String>(1)?))
+    })?;
+    let mut ids = Vec::new();
+    let mut seen = HashSet::new();
+    for row in rows {
+        let (id, email) = row?;
+        let keys = single_email_match_keys(&email);
+        if keys.iter().any(|key| recipient_keys.contains(key)) && seen.insert(id) {
+            ids.push(id);
         }
     }
-    Ok(())
+    if ids.is_empty() {
+        ids.push(fallback_account_id);
+    }
+    Ok(ids)
+}
+
+fn email_match_keys(text: &str) -> HashSet<String> {
+    let mut keys = HashSet::new();
+    for email in extract_email_addresses(text) {
+        for key in single_email_match_keys(&email) {
+            keys.insert(key);
+        }
+    }
+    keys
+}
+
+fn single_email_match_keys(email: &str) -> Vec<String> {
+    let email = email
+        .trim()
+        .trim_matches(['<', '>', '"', '\''])
+        .to_lowercase();
+    let mut keys = Vec::new();
+    if !is_email(&email) {
+        return keys;
+    }
+    keys.push(email.clone());
+    if let Some((local, domain)) = email.split_once('@') {
+        let dotless = local.replace('.', "");
+        if dotless != local {
+            keys.push(format!("{dotless}@{domain}"));
+        }
+    }
+    keys
+}
+
+fn with_warning(mut value: Value, warning: Option<String>) -> Value {
+    let Some(warning) = warning else {
+        return value;
+    };
+    if warning.trim().is_empty() {
+        return value;
+    }
+    if let Some(object) = value.as_object_mut() {
+        object.insert("warning".to_string(), json!(warning));
+    }
+    value
+}
+
+fn recipient_identity_warning(account_email: &str, mails: &[Value]) -> Option<String> {
+    let account_keys: HashSet<String> =
+        single_email_match_keys(account_email).into_iter().collect();
+    if account_keys.is_empty() {
+        return None;
+    }
+
+    let mut visible_count = 0usize;
+    let mut mismatch_count = 0usize;
+    let mut examples = Vec::new();
+
+    for mail in mails {
+        let recipients = mail
+            .get("recipients")
+            .and_then(Value::as_str)
+            .unwrap_or_default();
+        let addresses = extract_email_addresses(recipients);
+        if addresses.is_empty() {
+            continue;
+        }
+
+        visible_count += 1;
+        let matches_account = addresses.iter().any(|address| {
+            let recipient_keys: HashSet<String> =
+                single_email_match_keys(address).into_iter().collect();
+            !recipient_keys.is_disjoint(&account_keys)
+        });
+
+        if !matches_account {
+            mismatch_count += 1;
+            if examples.len() < 2 {
+                examples.push(addresses[0].clone());
+            }
+        }
+    }
+
+    if visible_count >= 2 && mismatch_count == visible_count && !examples.is_empty() {
+        return Some(format!(
+            "账号身份可能不一致：当前选择的是 {account_email}，但最近邮件实际投递给 {}。如果要收别名，请确认该别名已绑定到这个 Microsoft 邮箱；如果不是同一邮箱，需要重新导入正确令牌。",
+            examples.join(" / ")
+        ));
+    }
+
+    None
 }
 
 fn start_browser_login(body: Value) -> Result<Value, ApiError> {
@@ -2200,7 +2660,7 @@ fn fetch_mails_from_cache(conn: &Connection, body: Value) -> Result<Value, ApiEr
         .unwrap_or("INBOX");
     let mails = query_mails(
         conn,
-        "SELECT * FROM mail_cache WHERE account_id = ? AND mailbox = ? ORDER BY mail_date DESC LIMIT 100",
+        "SELECT * FROM mail_cache WHERE account_id = ? AND mailbox = ? ORDER BY COALESCE(NULLIF(mail_date, ''), cached_at) DESC LIMIT 100",
         &[&account_id, &mailbox],
     )?;
     Ok(json!({ "mails": mails, "total": mails.len(), "protocol": "native-cache", "cached": true }))
@@ -2220,6 +2680,7 @@ fn query_mails(
             "mail_id": row.get::<_, Option<String>>("mail_id")?.unwrap_or_default(),
             "sender": row.get::<_, Option<String>>("sender")?.unwrap_or_default(),
             "sender_name": row.get::<_, Option<String>>("sender_name")?.unwrap_or_default(),
+            "recipients": row.get::<_, Option<String>>("recipients")?.unwrap_or_default(),
             "subject": row.get::<_, Option<String>>("subject")?.unwrap_or_default(),
             "text_content": row.get::<_, Option<String>>("text_content")?.unwrap_or_default(),
             "html_content": row.get::<_, Option<String>>("html_content")?.unwrap_or_default(),
@@ -2235,7 +2696,7 @@ fn query_mails(
 fn recent_mails(conn: &Connection, limit: i64) -> Result<Vec<Value>, ApiError> {
     query_mails(
         conn,
-        "SELECT * FROM mail_cache ORDER BY mail_date DESC LIMIT ?",
+        "SELECT * FROM mail_cache ORDER BY COALESCE(NULLIF(mail_date, ''), cached_at) DESC LIMIT ?",
         &[&limit],
     )
 }
@@ -3429,8 +3890,10 @@ fn upsert_claw_mail(
         .and_then(Value::as_array)
         .map(|items| !items.is_empty())
         .unwrap_or(false);
-    let received_at =
+    let received_at_raw =
         value_string_any(mail, &["date", "sentDate", "receivedDate"]).unwrap_or_default();
+    let received_at =
+        normalize_mail_date(&received_at_raw).unwrap_or_else(|| received_at_raw.to_string());
 
     conn.execute(
         "INSERT INTO claw_mail_cache (
@@ -3577,7 +4040,7 @@ fn claw_mails(conn: &Connection, query: &HashMap<String, String>) -> Result<Valu
         &[&mailbox],
     )
     .unwrap_or(0);
-    let mut stmt = conn.prepare("SELECT id, mailbox_email, sender, sender_name, subject, text_content, html_content, received_at FROM claw_mail_cache WHERE mailbox_email = ? ORDER BY received_at DESC LIMIT ? OFFSET ?")?;
+    let mut stmt = conn.prepare("SELECT id, mailbox_email, sender, sender_name, subject, text_content, html_content, received_at FROM claw_mail_cache WHERE mailbox_email = ? ORDER BY COALESCE(NULLIF(received_at, ''), cached_at) DESC LIMIT ? OFFSET ?")?;
     let list = stmt
         .query_map(params![mailbox, page_size, offset], |row| {
             Ok(json!({

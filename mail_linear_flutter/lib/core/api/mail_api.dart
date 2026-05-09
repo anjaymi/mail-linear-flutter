@@ -10,7 +10,7 @@ class MailApi {
 
   final String baseUrl;
   final HttpClient _client = HttpClient();
-  static const Duration _requestTimeout = Duration(seconds: 12);
+  static const Duration _requestTimeout = Duration(seconds: 60);
   static const Duration _checkTimeout = Duration(milliseconds: 700);
 
   Future<bool> check() async {
@@ -39,7 +39,7 @@ class MailApi {
 
   Future<List<MailItem>> cachedMails(int accountId) async {
     final data = await _get(
-      '/api/mails/cached?account_id=$accountId&pageSize=100',
+      '/api/mails/cached?account_id=$accountId&pageSize=100&mailbox=all',
     );
     return (data['list'] as List? ?? [])
         .whereType<Map>()
@@ -50,8 +50,8 @@ class MailApi {
   Future<MailFetchResult> fetchMails(int accountId) async {
     final data = await _post('/api/mails/fetch', {
       'account_id': accountId,
-      'mailbox': 'INBOX',
-      'top': 50,
+      'mailbox': 'all',
+      'top': 100,
     });
     final mails = (data['mails'] as List? ?? [])
         .whereType<Map>()
@@ -59,9 +59,10 @@ class MailApi {
         .toList();
     return MailFetchResult(
       mails: mails,
-      protocol: data['protocol']?.toString() ?? 'unknown',
+      protocol: data['protocol']?.toString() ?? 'outlook',
       cached: data['cached'] == true,
       warning: data['warning']?.toString() ?? '',
+      newCount: (data['savedCount'] as num?)?.toInt() ?? 0,
     );
   }
 
@@ -149,6 +150,7 @@ class MailApi {
       protocol: sync ? 'claw' : 'claw-cache',
       cached: !sync,
       warning: syncInfo['message']?.toString() ?? '',
+      newCount: (syncInfo['savedCount'] as num?)?.toInt() ?? 0,
     );
   }
 
@@ -225,12 +227,14 @@ class MailFetchResult {
     required this.protocol,
     required this.cached,
     required this.warning,
+    required this.newCount,
   });
 
   final List<MailItem> mails;
   final String protocol;
   final bool cached;
   final String warning;
+  final int newCount;
 
   String get sourceLabel {
     final source = protocol.toUpperCase();

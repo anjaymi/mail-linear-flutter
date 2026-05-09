@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
+import '../../core/motion/motion_tokens.dart';
 import '../../core/theme/app_theme.dart';
+import 'motion_widgets.dart';
 
 class StatusPill extends StatelessWidget {
   const StatusPill({
@@ -9,16 +11,20 @@ class StatusPill extends StatelessWidget {
     this.color = LinearColors.green,
     this.icon,
     this.maxWidth,
+    this.busy = false,
   });
 
   final String label;
   final Color color;
   final IconData? icon;
   final double? maxWidth;
+  final bool busy;
 
   @override
   Widget build(BuildContext context) {
-    final content = Container(
+    final content = AnimatedContainer(
+      duration: MotionTokens.duration(context, MotionTokens.normal),
+      curve: MotionTokens.easeOut,
       height: 34,
       padding: const EdgeInsets.symmetric(horizontal: 12),
       decoration: BoxDecoration(
@@ -29,14 +35,27 @@ class StatusPill extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon ?? Icons.circle, size: icon == null ? 8 : 16, color: color),
+          icon == null
+              ? Icon(Icons.circle, size: 8, color: color)
+              : MotionSyncIcon(
+                  icon: icon!,
+                  active: busy,
+                  size: 16,
+                  color: color,
+                ),
           const SizedBox(width: 8),
           Flexible(
-            child: Text(
-              label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: AppText.label.copyWith(color: color),
+            child: AnimatedSwitcher(
+              duration: MotionTokens.duration(context, MotionTokens.normal),
+              switchInCurve: MotionTokens.easeOut,
+              switchOutCurve: Curves.easeIn,
+              child: Text(
+                label,
+                key: ValueKey(label),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppText.label.copyWith(color: color),
+              ),
             ),
           ),
         ],

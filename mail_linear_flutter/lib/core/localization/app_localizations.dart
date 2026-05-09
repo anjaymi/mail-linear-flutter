@@ -237,6 +237,31 @@ class AppStrings {
     _ => '$value $minute',
   };
 
+  String autoReceiveDone(int accounts, int mails) => switch (this) {
+    final s when identical(s, zhHant) => '自動接收完成：$accounts 個帳號，$mails 封新郵件',
+    final s when identical(s, ja) => '自動受信完了：$accounts 件のアカウント、$mails 件の新着',
+    final s when identical(s, en) =>
+      'Auto receive complete: $accounts accounts, $mails new mails',
+    final s when identical(s, ko) => '자동 수신 완료: 계정 $accounts개, 새 메일 $mails개',
+    _ => '自动接收完成：$accounts 个账号，$mails 封新邮件',
+  };
+
+  String autoReceivePartial(
+    int accounts,
+    int failed,
+    int mails,
+  ) => switch (this) {
+    final s when identical(s, zhHant) =>
+      '自動接收部分完成：$accounts 個成功，$failed 個失敗，$mails 封新郵件',
+    final s when identical(s, ja) =>
+      '自動受信一部完了：成功 $accounts、失敗 $failed、新着 $mails',
+    final s when identical(s, en) =>
+      'Auto receive partial: $accounts ok, $failed failed, $mails new mails',
+    final s when identical(s, ko) =>
+      '자동 수신 일부 완료: 성공 $accounts개, 실패 $failed개, 새 메일 $mails개',
+    _ => '自动接收部分完成：$accounts 个成功，$failed 个失败，$mails 封新邮件',
+  };
+
   String soundLabel(String value) => switch (value) {
     'soft' => soundSoftLabel,
     'notice' => soundNoticeLabel,
@@ -304,7 +329,7 @@ class AppStrings {
     autoStartDetail: '打开 EXE 后自动创建本地 API 端口。',
     enabled: '已开启',
     autoReceiveTitle: '自动接收',
-    autoReceiveDetail: '按间隔自动收取当前选中的 Outlook 账号。',
+    autoReceiveDetail: '按间隔后台巡检可用 Outlook 账号，有新邮件时提醒。',
     portPolicyTitle: '端口策略',
     portPolicyDetail: '3000 被占用时改用下一个可用端口。',
     autoSwitch: '自动切换',
@@ -382,7 +407,7 @@ class AppStrings {
     autoStartDetail: '開啟 EXE 後自動建立本地 API 連接埠。',
     enabled: '已開啟',
     autoReceiveTitle: '自動接收',
-    autoReceiveDetail: '依間隔自動收取目前選取的 Outlook 帳號。',
+    autoReceiveDetail: '依間隔背景巡檢可用 Outlook 帳號，有新郵件時提醒。',
     portPolicyTitle: '連接埠策略',
     portPolicyDetail: '3000 被占用時改用下一個可用連接埠。',
     autoSwitch: '自動切換',
@@ -460,7 +485,7 @@ class AppStrings {
     autoStartDetail: 'EXE 起動時にローカル API ポートを作成します。',
     enabled: '有効',
     autoReceiveTitle: '自動受信',
-    autoReceiveDetail: '選択中の Outlook アカウントを一定間隔で受信します。',
+    autoReceiveDetail: '利用可能な Outlook アカウントを定期的に巡回し、新着時に通知します。',
     portPolicyTitle: 'ポート設定',
     portPolicyDetail: '3000 が使用中の場合は次の空きポートを使います。',
     autoSwitch: '自動切替',
@@ -540,7 +565,7 @@ class AppStrings {
     enabled: 'Enabled',
     autoReceiveTitle: 'Auto Receive',
     autoReceiveDetail:
-        'Fetch mail for the selected Outlook account on an interval.',
+        'Check available Outlook accounts in the background and alert on new mail.',
     portPolicyTitle: 'Port Policy',
     portPolicyDetail: 'Use the next free port when 3000 is occupied.',
     autoSwitch: 'Auto Switch',
@@ -619,7 +644,7 @@ class AppStrings {
     autoStartDetail: 'EXE 실행 시 로컬 API 포트를 만듭니다.',
     enabled: '켜짐',
     autoReceiveTitle: '자동 수신',
-    autoReceiveDetail: '선택한 Outlook 계정을 주기적으로 수신합니다.',
+    autoReceiveDetail: '사용 가능한 Outlook 계정을 백그라운드로 확인하고 새 메일을 알립니다.',
     portPolicyTitle: '포트 정책',
     portPolicyDetail: '3000이 사용 중이면 다음 사용 가능 포트를 씁니다.',
     autoSwitch: '자동 전환',

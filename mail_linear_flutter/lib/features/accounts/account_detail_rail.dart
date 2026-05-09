@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 
 import '../../app/app_state.dart';
 import '../../core/models/mail_account.dart';
+import '../../core/motion/motion_tokens.dart';
 import '../../core/theme/app_theme.dart';
 import '../../shared/widgets/action_button.dart';
 import '../../shared/widgets/status_pill.dart';
@@ -73,9 +74,12 @@ class _BatchActions extends StatelessWidget {
           children: [
             Expanded(
               child: LinearButton(
-                label: state.text.ui('批量收件'),
+                label: state.fetching
+                    ? state.text.fetching
+                    : state.text.ui('批量收件'),
                 icon: Icons.sync,
                 primary: true,
+                busy: state.fetching,
                 onPressed: selectedIds.isEmpty || state.fetching
                     ? null
                     : () => state.fetchAccounts(selectedIds),
@@ -115,9 +119,16 @@ class _SelectedAccount extends StatelessWidget {
         Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            CircleAvatar(
-              radius: 22,
-              backgroundColor: account.color,
+            AnimatedContainer(
+              duration: MotionTokens.duration(context, MotionTokens.normal),
+              curve: MotionTokens.easeOut,
+              width: 44,
+              height: 44,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: account.color,
+                shape: BoxShape.circle,
+              ),
               child: Text(
                 letter,
                 style: AppText.bodyStrong.copyWith(color: Colors.white),

@@ -44,6 +44,7 @@ class AppState extends ChangeNotifier {
   AppLanguage language = AppLanguage.zhHans;
   AppStrings get text => AppStrings.of(language);
   Timer? _autoReceiveTimer;
+  bool _autoReceiveRunning = false;
 
   Future<void> boot() async {
     loading = true;
@@ -63,6 +64,7 @@ class AppState extends ChangeNotifier {
       notifyListeners();
       await refresh();
       _syncAutoReceiveTimer();
+      if (autoReceiveEnabled) unawaited(_autoReceiveTick());
     } catch (ex) {
       error = ex.toString();
       loading = false;
@@ -160,7 +162,7 @@ class AppState extends ChangeNotifier {
       if (openMail) page = AppPage.mail;
       mailSource = result.sourceLabel;
       mailWarning = result.warning;
-      await _playMailSoundIfNeeded(mails.isNotEmpty);
+      await _playMailSoundIfNeeded(result.newCount > 0);
       lifecycle = mails.isEmpty ? text.noNewMail : text.fetchDone;
     } catch (ex) {
       error = ex.toString();
@@ -187,7 +189,7 @@ class AppState extends ChangeNotifier {
           selectedMail = mails.isEmpty ? null : mails.first;
           mailSource = result.sourceLabel;
           mailWarning = result.warning;
-          await _playMailSoundIfNeeded(mails.isNotEmpty);
+          await _playMailSoundIfNeeded(result.newCount > 0);
         }
       }
       stats = await _requireApi().dashboard();
@@ -219,7 +221,7 @@ class AppState extends ChangeNotifier {
       mailSource = result.sourceLabel;
       mailWarning = result.warning;
       if (openMail) page = AppPage.mail;
-      await _playMailSoundIfNeeded(mails.isNotEmpty);
+      await _playMailSoundIfNeeded(result.newCount > 0);
       lifecycle = mails.isEmpty ? text.clawNoNewMail : text.clawFetchDone;
     } catch (ex) {
       error = ex.toString();
@@ -392,10 +394,19 @@ class AppState extends ChangeNotifier {
   }
 
   Future<void> setAccountMarker(int id, String color) async {
-    await _requireApi().setAccountMarker(id, color);
-    await refresh();
+    _replaceAccountMarker(id, color);
     lifecycle = text.markerUpdated;
     notifyListeners();
+    try {
+      await _requireApi().setAccountMarker(id, color);
+      await refresh();
+    } catch (ex) {
+      final message = ex.toString();
+      await refresh();
+      error = message;
+      lifecycle = text.refreshFailed;
+      notifyListeners();
+    }
   }
 
   Future<void> setLanguage(AppLanguage next) async {
@@ -427,6 +438,7 @@ class AppState extends ChangeNotifier {
     await _prefs.saveAutoReceiveEnabled(enabled);
     _syncAutoReceiveTimer();
     notifyListeners();
+    if (enabled) unawaited(_autoReceiveTick());
   }
 
   Future<void> setAutoReceiveMinutes(int minutes) async {
@@ -447,20 +459,89 @@ class AppState extends ChangeNotifier {
   }
 
   Future<void> _autoReceiveTick() async {
-    if (fetching || loading || _api == null) return;
+    if (_autoReceiveRunning || fetching || loading || _api == null) return;
+    _autoReceiveRunning = true;
+    try {
+      if (mode == WorkMode.claw) {
+        await _autoReceiveClaw();
+        return;
+      }
+      await _autoReceiveOutlook();
+    } finally {
+      _autoReceiveRunning = false;
+    }
+  }
+
+  Future<void> _autoReceiveClaw() async {
     if (mode == WorkMode.claw) {
       if (selectedClawMailbox == null) {
         await refresh();
         if (selectedClawMailbox == null) return;
       }
       await fetchSelectedClawMail(openMail: false);
-      return;
     }
+  }
+
+  Future<void> _autoReceiveOutlook() async {
     if (selectedAccount == null) {
       await refresh();
-      if (selectedAccount == null) return;
     }
-    await _fetchSelectedMail(openMail: false);
+    final targets = _autoReceiveTargets();
+    if (targets.isEmpty) return;
+
+    lifecycle = text.ui('自动接收中');
+    notifyListeners();
+
+    var newCount = 0;
+    var checked = 0;
+    var failed = 0;
+    MailFetchResult? selectedResult;
+
+    for (final account in targets) {
+      try {
+        final result = await _requireApi().fetchMails(account.id);
+        checked += 1;
+        newCount += result.newCount;
+        if (selectedAccount?.id == account.id) {
+          selectedResult = result;
+        }
+      } catch (_) {
+        failed += 1;
+      }
+    }
+
+    if (selectedResult != null) {
+      mails = selectedResult.mails;
+      selectedMail = mails.isEmpty ? null : mails.first;
+      mailSource = selectedResult.sourceLabel;
+      mailWarning = selectedResult.warning;
+    }
+
+    try {
+      stats = await _requireApi().dashboard();
+    } catch (_) {}
+
+    if (newCount > 0) {
+      await _playMailSoundIfNeeded(true);
+    }
+    lifecycle = failed == 0
+        ? text.autoReceiveDone(checked, newCount)
+        : text.autoReceivePartial(checked, failed, newCount);
+    notifyListeners();
+  }
+
+  List<MailAccount> _autoReceiveTargets() {
+    final active = accounts
+        .where((account) => account.status.toLowerCase() != 'error')
+        .toList();
+    final selected = selectedAccount;
+    if (selected == null) return active;
+    active.sort((a, b) {
+      if (a.id == selected.id) return -1;
+      if (b.id == selected.id) return 1;
+      return b.id.compareTo(a.id);
+    });
+    return active;
   }
 
   Future<void> _playMailSoundIfNeeded(bool hasMail) async {
@@ -476,6 +557,17 @@ class AppState extends ChangeNotifier {
       if (account.id == current.id) return account;
     }
     return accounts.first;
+  }
+
+  void _replaceAccountMarker(int id, String color) {
+    accounts = [
+      for (final account in accounts)
+        account.id == id ? account.copyWith(markerColor: color) : account,
+    ];
+    final selected = selectedAccount;
+    if (selected != null && selected.id == id) {
+      selectedAccount = selected.copyWith(markerColor: color);
+    }
   }
 
   Map<String, dynamic>? _resolveSelectedClawMailbox() {

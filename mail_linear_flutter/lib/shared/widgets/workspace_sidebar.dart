@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 
 import '../../app/app_state.dart';
+import '../../core/motion/motion_tokens.dart';
 import '../../core/theme/app_theme.dart';
+import 'motion_widgets.dart';
 import 'vector_chrome_icons.dart';
 
 class WorkspaceSidebar extends StatelessWidget {
@@ -110,13 +112,14 @@ class _NavItem extends StatelessWidget {
     final active = state.page == page;
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
-      child: MouseRegion(
-        cursor: SystemMouseCursors.click,
+      child: MotionTapSurface(
+        lift: false,
         child: InkWell(
           borderRadius: BorderRadius.circular(16),
           onTap: () => state.setPage(page),
           child: AnimatedContainer(
-            duration: const Duration(milliseconds: 140),
+            duration: MotionTokens.duration(context, MotionTokens.normal),
+            curve: MotionTokens.easeOut,
             height: 46,
             padding: const EdgeInsets.symmetric(horizontal: 12),
             decoration: BoxDecoration(
@@ -133,7 +136,8 @@ class _NavItem extends StatelessWidget {
             child: Row(
               children: [
                 AnimatedContainer(
-                  duration: const Duration(milliseconds: 140),
+                  duration: MotionTokens.duration(context, MotionTokens.normal),
+                  curve: MotionTokens.easeOutStrong,
                   width: 4,
                   height: active ? 20 : 4,
                   decoration: BoxDecoration(
@@ -142,44 +146,20 @@ class _NavItem extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: 10),
-                _IconTile(icon: icon, active: active),
+                MotionIconTile(icon: icon, active: active),
                 const SizedBox(width: 10),
-                Text(
-                  label,
+                AnimatedDefaultTextStyle(
+                  duration: MotionTokens.duration(context, MotionTokens.normal),
+                  curve: MotionTokens.easeOut,
                   style: AppText.bodyStrong.copyWith(
                     color: active ? LinearColors.blue : LinearColors.muted,
                   ),
+                  child: Text(label),
                 ),
               ],
             ),
           ),
         ),
-      ),
-    );
-  }
-}
-
-class _IconTile extends StatelessWidget {
-  const _IconTile({required this.icon, required this.active});
-
-  final IconData icon;
-  final bool active;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 28,
-      height: 28,
-      decoration: BoxDecoration(
-        color: active
-            ? Colors.transparent
-            : LinearColors.surfaceSoft.withValues(alpha: .80),
-        borderRadius: BorderRadius.circular(9),
-      ),
-      child: Icon(
-        icon,
-        size: 16,
-        color: active ? LinearColors.blue : LinearColors.muted,
       ),
     );
   }

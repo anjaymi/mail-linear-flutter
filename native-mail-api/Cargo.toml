@@ -7,6 +7,7 @@ edition = "2021"
 rusqlite = { version = "0.33", features = ["bundled"] }
 reqwest = { version = "0.12", default-features = false, features = ["blocking", "json", "rustls-tls"] }
 base64 = "0.22"
+chrono = "0.4"
 getrandom = "0.3"
 mailparse = "0.16"
 native-tls = "0.2"

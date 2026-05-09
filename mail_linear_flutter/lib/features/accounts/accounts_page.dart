@@ -343,8 +343,11 @@ class _ClawAccountRail extends StatelessWidget {
                 ),
                 const SizedBox(height: 10),
                 LinearButton(
-                  label: state.text.clawFetch,
+                  label: state.fetching
+                      ? state.text.fetching
+                      : state.text.clawFetch,
                   icon: Icons.sync,
+                  busy: state.fetching,
                   onPressed: state.fetching ? null : state.fetchSelectedMail,
                 ),
                 const SizedBox(height: 10),

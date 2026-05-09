@@ -23,6 +23,7 @@ class LifecyclePill extends StatelessWidget {
         label: state.lifecycle,
         color: LinearColors.blue,
         icon: Icons.sync,
+        busy: state.fetching,
       );
     }
     return StatusPill(label: state.text.ready);

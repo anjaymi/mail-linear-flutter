@@ -33,6 +33,22 @@ class MailAccount {
 
   bool get isError => status.toLowerCase() == 'error';
 
+  MailAccount copyWith({
+    String? markerColor,
+    String? status,
+    String? lastSyncedAt,
+  }) {
+    return MailAccount(
+      id: id,
+      email: email,
+      status: status ?? this.status,
+      clientId: clientId,
+      refreshToken: refreshToken,
+      markerColor: markerColor ?? this.markerColor,
+      lastSyncedAt: lastSyncedAt ?? this.lastSyncedAt,
+    );
+  }
+
   Color get color {
     final raw = markerColor.replaceFirst('#', '');
     if (raw.length != 6) return const Color(0xff94a3b8);

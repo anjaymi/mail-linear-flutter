@@ -238,11 +238,14 @@ class _RightRail extends StatelessWidget {
               ),
               const SizedBox(height: 20),
               LinearButton(
-                label: state.mode == WorkMode.claw
+                label: state.fetching
+                    ? state.text.fetching
+                    : state.mode == WorkMode.claw
                     ? state.text.clawFetch
                     : state.text.startFetch,
                 icon: Icons.sync,
                 primary: true,
+                busy: state.fetching,
                 onPressed:
                     state.fetching ||
                         (state.mode == WorkMode.claw
