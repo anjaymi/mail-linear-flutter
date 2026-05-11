@@ -106,7 +106,7 @@ class MotionIconTile extends StatelessWidget {
         color: active
             ? activeColor.withValues(alpha: .12)
             : LinearColors.surfaceSoft.withValues(alpha: .80),
-        borderRadius: BorderRadius.circular(9),
+        borderRadius: BorderRadius.circular(AppRadii.xs),
       ),
       child: AnimatedScale(
         scale: active ? 1.04 : 1,

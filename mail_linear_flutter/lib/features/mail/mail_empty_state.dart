@@ -88,7 +88,7 @@ class MailNotice extends StatelessWidget {
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: color.withValues(alpha: .1),
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(AppRadii.sm),
         border: Border.all(color: color.withValues(alpha: .22)),
       ),
       child: Text(

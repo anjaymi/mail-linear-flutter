@@ -3,8 +3,6 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 
 import '../core/localization/app_localizations.dart';
 import '../core/theme/app_theme.dart';
-import '../features/accounts/accounts_page.dart';
-import '../features/dashboard/dashboard_page.dart';
 import '../features/mail/mail_page.dart';
 import '../features/settings/settings_page.dart';
 import '../shared/widgets/linear_shell.dart';
@@ -55,10 +53,7 @@ class _MailLinearAppState extends State<MailLinearApp> {
   Widget _page() {
     if (state.loading) return const _BootPage();
     return switch (state.page) {
-      AppPage.dashboard => DashboardPage(state: state),
-      AppPage.accounts => AccountsPage(state: state),
       AppPage.mail => MailPage(state: state),
-      AppPage.claw => SettingsPage(state: state, clawOnly: true),
       AppPage.settings => SettingsPage(state: state),
     };
   }

@@ -75,118 +75,121 @@ class _ClawSettingsPanelState extends State<ClawSettingsPanel> {
   @override
   Widget build(BuildContext context) {
     final connected = status['connected'] == true;
-    return Container(
-      padding: const EdgeInsets.all(26),
-      decoration: AppSurfaces.panel(radius: 28),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Text(
-                'ClawEmail',
-                style: Theme.of(context).textTheme.headlineMedium,
-              ),
-              const Spacer(),
-              StatusPill(
-                label: widget.state.text.ui(connected ? '已绑定' : '未绑定'),
-                color: connected ? LinearColors.green : LinearColors.amber,
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Text(
-            connected
-                ? '${status['userEmail'] ?? ''} · ${status['domain'] ?? 'claw.163.com'}'
-                : widget.state.text.ui('绑定 Claw 后可同步子邮箱和通讯规则。'),
-            style: AppText.muted,
-          ),
-          const SizedBox(height: 22),
-          TextField(
-            controller: email,
-            decoration: InputDecoration(
-              labelText: widget.state.text.ui('Claw 登录邮箱'),
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(24, 16, 24, 24),
+      child: SingleChildScrollView(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Text(
+                  'ClawEmail',
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
+                const Spacer(),
+                StatusPill(
+                  label: widget.state.text.ui(connected ? '已绑定' : '未绑定'),
+                  color: connected ? LinearColors.green : LinearColors.amber,
+                  solid: !connected,
+                ),
+              ],
             ),
-          ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: TextField(
-                  controller: code,
-                  decoration: InputDecoration(
-                    labelText: widget.state.text.ui('验证码'),
+            const SizedBox(height: 6),
+            Text(
+              connected
+                  ? '${status['userEmail'] ?? ''} · ${status['domain'] ?? 'claw.163.com'}'
+                  : widget.state.text.ui('绑定 Claw 后可同步子邮箱和通讯规则。'),
+              style: AppText.muted,
+            ),
+            const SizedBox(height: 18),
+            TextField(
+              controller: email,
+              decoration: InputDecoration(
+                labelText: widget.state.text.ui('Claw 登录邮箱'),
+              ),
+            ),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: code,
+                    decoration: InputDecoration(
+                      labelText: widget.state.text.ui('验证码'),
+                    ),
                   ),
                 ),
-              ),
-              const SizedBox(width: 12),
-              LinearButton(
-                label: widget.state.text.ui('发送验证码'),
-                onPressed: busy
-                    ? null
-                    : () => _run(
-                        () => widget.state.api!.clawSendCode(email.text),
-                        widget.state.text.ui('验证码已发送'),
-                      ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-          Row(
-            children: [
-              LinearButton(
-                label: widget.state.text.ui('绑定并同步'),
-                icon: Icons.sync,
-                primary: true,
-                onPressed: busy
-                    ? null
-                    : () => _run(
-                        () => widget.state.api!.clawVerifyCode(
-                          email.text,
-                          code.text,
+                const SizedBox(width: 12),
+                LinearButton(
+                  label: widget.state.text.ui('发送验证码'),
+                  onPressed: busy
+                      ? null
+                      : () => _run(
+                          () => widget.state.api!.clawSendCode(email.text),
+                          widget.state.text.ui('验证码已发送'),
                         ),
-                        widget.state.text.ui('Claw 已绑定并同步'),
-                      ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                LinearButton(
+                  label: widget.state.text.ui('绑定并同步'),
+                  icon: Icons.sync,
+                  primary: true,
+                  onPressed: busy
+                      ? null
+                      : () => _run(
+                          () => widget.state.api!.clawVerifyCode(
+                            email.text,
+                            code.text,
+                          ),
+                          widget.state.text.ui('Claw 已绑定并同步'),
+                        ),
+                ),
+                const SizedBox(width: 12),
+                LinearButton(
+                  label: widget.state.text.ui('刷新授权'),
+                  icon: Icons.refresh,
+                  onPressed: busy
+                      ? null
+                      : () => _run(
+                          widget.state.api!.clawRefreshAuth,
+                          widget.state.text.ui('Claw 授权已刷新'),
+                        ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 20),
+            _MailboxCreator(
+              state: widget.state,
+              controller: suffix,
+              busy: busy,
+              onCreate: () => _run(
+                () => widget.state.api!.clawCreateMailbox(suffix.text),
+                widget.state.text.ui('子邮箱已创建'),
               ),
-              const SizedBox(width: 12),
-              LinearButton(
-                label: widget.state.text.ui('刷新授权'),
-                icon: Icons.refresh,
-                onPressed: busy
-                    ? null
-                    : () => _run(
-                        widget.state.api!.clawRefreshAuth,
-                        widget.state.text.ui('Claw 授权已刷新'),
-                      ),
+              onSync: () => _run(
+                () => widget.state.api!
+                    .clawMailboxes(sync: true)
+                    .then((items) => mailboxes = items),
+                widget.state.text.ui('子邮箱已同步'),
               ),
-            ],
-          ),
-          const Divider(height: 34),
-          _MailboxCreator(
-            state: widget.state,
-            controller: suffix,
-            busy: busy,
-            onCreate: () => _run(
-              () => widget.state.api!.clawCreateMailbox(suffix.text),
-              widget.state.text.ui('子邮箱已创建'),
             ),
-            onSync: () => _run(
-              () => widget.state.api!
-                  .clawMailboxes(sync: true)
-                  .then((items) => mailboxes = items),
-              widget.state.text.ui('子邮箱已同步'),
+            const SizedBox(height: 12),
+            SizedBox(
+              height: 320,
+              child: _MailboxList(state: widget.state, items: mailboxes),
             ),
-          ),
-          const SizedBox(height: 14),
-          Expanded(
-            child: _MailboxList(state: widget.state, items: mailboxes),
-          ),
-          if (message.isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.only(top: 12),
-              child: Text(message, style: AppText.muted),
-            ),
-        ],
+            if (message.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 10),
+                child: Text(message, style: AppText.muted),
+              ),
+          ],
+        ),
       ),
     );
   }
@@ -220,6 +223,7 @@ class _MailboxCreator extends StatelessWidget {
         const SizedBox(width: 12),
         LinearButton(
           label: state.text.ui('创建'),
+          primary: true,
           onPressed: busy ? null : onCreate,
         ),
         const SizedBox(width: 8),
@@ -253,7 +257,7 @@ class _MailboxList extends StatelessWidget {
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
             color: LinearColors.panel.withValues(alpha: .76),
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(AppRadii.sm),
             border: Border.all(
               color: LinearColors.chromeLine.withValues(alpha: .62),
             ),

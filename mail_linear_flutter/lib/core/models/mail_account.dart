@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../theme/app_theme.dart';
+
 class MailAccount {
   const MailAccount({
     required this.id,
@@ -51,7 +53,7 @@ class MailAccount {
 
   Color get color {
     final raw = markerColor.replaceFirst('#', '');
-    if (raw.length != 6) return const Color(0xff94a3b8);
+    if (raw.length != 6) return LinearColors.faint;
     return Color(int.parse('ff$raw', radix: 16));
   }
 }

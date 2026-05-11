@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
+import 'dart:ui' show Color;
 
 import '../core/api/local_api_controller.dart';
 import '../core/api/mail_api.dart';
@@ -10,19 +11,37 @@ import '../core/models/mail_account.dart';
 import '../core/models/mail_item.dart';
 import '../core/platform/sound_service.dart';
 import '../core/preferences/app_preferences.dart';
+import '../core/theme/app_theme.dart';
 
-enum AppPage { dashboard, accounts, mail, claw, settings }
+part 'app_state_accounts.dart';
+part 'app_state_claw_mail.dart';
+part 'app_state_mail_followup.dart';
+part 'app_state_mail_navigation.dart';
+part 'app_state_outlook_mail.dart';
+part 'app_state_settings.dart';
+
+enum AppPage { mail, settings }
 
 enum WorkMode { outlook, claw }
+
+enum MailFilter { all, codes }
 
 class AppState extends ChangeNotifier {
   final LocalApiController _controller = LocalApiController();
   final AppPreferences _prefs = AppPreferences();
+  final Map<int, Future<MailFetchResult>> _outlookFetches = {};
+  final Map<int, Timer> _outlookFollowUpTimers = {};
+  final Map<int, int> _outlookFollowUpAttempts = {};
+  final Set<int> _outlookFollowUpBusy = {};
+  bool _initialAccountCheckStarted = false;
+
   MailApi? _api;
   MailApi? get api => _api;
 
-  AppPage page = AppPage.dashboard;
+  AppPage page = AppPage.mail;
+  SettingsTab settingsTab = SettingsTab.general;
   WorkMode mode = WorkMode.outlook;
+  MailFilter mailFilter = MailFilter.all;
   DashboardStats stats = DashboardStats.empty();
   List<MailAccount> accounts = [];
   List<Map<String, dynamic>> clawMailboxes = [];
@@ -34,6 +53,7 @@ class AppState extends ChangeNotifier {
   String error = '';
   bool loading = true;
   bool fetching = false;
+  bool checkingAccounts = false;
   String lifecycle = '正在启动本地 API';
   String mailSource = '缓存';
   String mailWarning = '';
@@ -42,11 +62,14 @@ class AppState extends ChangeNotifier {
   bool autoReceiveEnabled = false;
   int autoReceiveMinutes = 5;
   AppLanguage language = AppLanguage.zhHans;
-  AppStrings get text => AppStrings.of(language);
+  Color accentColor = LinearColors.ink;
+
   Timer? _autoReceiveTimer;
   bool _autoReceiveRunning = false;
   int _autoReceiveCursor = 0;
   int _mailLoadEpoch = 0;
+
+  AppStrings get text => AppStrings.of(language);
 
   Future<void> boot() async {
     loading = true;
@@ -59,6 +82,13 @@ class AppState extends ChangeNotifier {
       autoReceiveMinutes = await _prefs.loadAutoReceiveMinutes();
       soundEnabled = await _prefs.loadSoundEnabled();
       soundTone = await _prefs.loadSoundTone();
+      final accentHex = await _prefs.loadAccentColor();
+      if (accentHex.isNotEmpty) {
+        final raw = accentHex.replaceFirst('#', '');
+        if (raw.length == 6) {
+          accentColor = Color(int.parse('ff$raw', radix: 16));
+        }
+      }
       serverUrl = await _controller.start();
       _api = MailApi(serverUrl);
       loading = false;
@@ -101,6 +131,8 @@ class AppState extends ChangeNotifier {
         stats = result[0] as DashboardStats;
         accounts = result[1] as List<MailAccount>;
         selectedAccount = _resolveSelectedAccount();
+        _syncAutoReceiveCursorToSelected();
+        _queueInitialAccountCheck();
         selectedClawMailbox = null;
         clawMailboxes = [];
       }
@@ -119,194 +151,34 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> selectAccount(
-    MailAccount account, {
-    bool openMail = true,
-  }) async {
-    final epoch = ++_mailLoadEpoch;
-    mode = WorkMode.outlook;
-    selectedAccount = account;
-    selectedClawMailbox = null;
-    mails = [];
-    selectedMail = null;
-    mailWarning = '';
-    mailSource = text.ui('缓存');
-    if (openMail) page = AppPage.mail;
-    notifyListeners();
-    await loadCachedMails(account, epoch: epoch);
-  }
-
-  Future<void> loadCachedMails(MailAccount account, {int? epoch}) async {
-    final requestEpoch = epoch ?? ++_mailLoadEpoch;
-    error = '';
-    try {
-      final cached = await _requireApi().cachedMails(account.id);
-      if (!_isCurrentOutlookAccount(account.id, requestEpoch)) return;
-      mails = cached;
-      selectedMail = cached.isEmpty ? null : cached.first;
-    } catch (ex) {
-      if (!_isCurrentOutlookAccount(account.id, requestEpoch)) return;
-      error = ex.toString();
-    }
-    notifyListeners();
-  }
-
-  Future<void> fetchSelectedMail() async {
-    if (mode == WorkMode.claw) {
-      await fetchSelectedClawMail(openMail: true);
-      return;
-    }
-    await _fetchSelectedMail(openMail: true);
-  }
-
-  Future<void> _fetchSelectedMail({required bool openMail}) async {
-    final account = selectedAccount;
-    if (account == null) return;
-    fetching = true;
-    error = '';
-    lifecycle = text.fetchingMail;
-    notifyListeners();
-    try {
-      final result = await _requireApi().fetchMails(account.id);
-      if (!_isCurrentOutlookAccount(account.id)) return;
-      final cached = await _requireApi().cachedMails(account.id);
-      if (!_isCurrentOutlookAccount(account.id)) return;
-      mails = cached.isEmpty ? result.mails : cached;
-      selectedMail = mails.isEmpty ? null : mails.first;
-      stats = await _requireApi().dashboard();
-      if (openMail) page = AppPage.mail;
-      mailSource = result.sourceLabel;
-      mailWarning = _mailFetchMessage(result);
-      await _playMailSoundIfNeeded(result.newCount > 0);
-      lifecycle = result.newCount > 0
-          ? text.ui('收取完成，新增 ${result.newCount} 封。')
-          : mails.isEmpty
-          ? text.noNewMail
-          : text.fetchDone;
-    } catch (ex) {
-      error = ex.toString();
-      lifecycle = text.fetchFailed;
-    } finally {
-      fetching = false;
-      notifyListeners();
-    }
-  }
-
-  Future<void> fetchAccounts(List<int> ids) async {
-    final targets = ids.map(_accountById).whereType<MailAccount>().toList();
-    if (targets.isEmpty) return;
-    fetching = true;
-    error = '';
-    lifecycle = text.batchFetching;
-    notifyListeners();
-    try {
-      for (final account in targets) {
-        final result = await _requireApi().fetchMails(account.id);
-        if (account.id == targets.last.id) {
-          selectedAccount = account;
-          final cached = await _requireApi().cachedMails(account.id);
-          mails = cached.isEmpty ? result.mails : cached;
-          selectedMail = mails.isEmpty ? null : mails.first;
-          mailSource = result.sourceLabel;
-          mailWarning = _mailFetchMessage(result);
-          await _playMailSoundIfNeeded(result.newCount > 0);
-        }
-      }
-      stats = await _requireApi().dashboard();
-      page = AppPage.mail;
-      lifecycle = text.batchFetchDone;
-    } catch (ex) {
-      error = ex.toString();
-      lifecycle = text.batchFetchFailed;
-    } finally {
-      fetching = false;
-      notifyListeners();
-    }
-  }
-
-  Future<void> fetchSelectedClawMail({bool openMail = true}) async {
-    final mailbox = selectedClawMailbox;
-    if (mailbox == null) return;
-    final email = clawMailboxEmail(mailbox);
-    if (email.isEmpty) return;
-    fetching = true;
-    error = '';
-    lifecycle = text.fetchingClawMail;
-    notifyListeners();
-    try {
-      final result = await _requireApi().clawMails(mailbox: email, sync: true);
-      mails = result.mails;
-      selectedMail = mails.isEmpty ? null : mails.first;
-      stats = await _requireApi().clawStats();
-      mailSource = result.sourceLabel;
-      mailWarning = result.warning;
-      if (openMail) page = AppPage.mail;
-      await _playMailSoundIfNeeded(result.newCount > 0);
-      lifecycle = mails.isEmpty ? text.clawNoNewMail : text.clawFetchDone;
-    } catch (ex) {
-      error = ex.toString();
-      lifecycle = text.clawFetchFailed;
-    } finally {
-      fetching = false;
-      notifyListeners();
-    }
-  }
-
-  Future<void> loadCachedClawMails(Map<String, dynamic> mailbox) async {
-    final email = clawMailboxEmail(mailbox);
-    if (email.isEmpty) return;
-    selectedClawMailbox = mailbox;
-    error = '';
-    try {
-      final result = await _requireApi().clawMails(mailbox: email);
-      mails = result.mails;
-      selectedMail = mails.isEmpty ? null : mails.first;
-      mailSource = result.sourceLabel;
-      mailWarning = result.warning;
-    } catch (ex) {
-      error = ex.toString();
-    }
-    notifyListeners();
-  }
-
-  Future<void> refreshCurrentMailbox() async {
-    error = '';
-    if (mode == WorkMode.claw) {
-      final mailbox = selectedClawMailbox;
-      if (mailbox == null) {
-        await refresh(loadSelectedMail: true);
-        return;
-      }
-      await loadCachedClawMails(mailbox);
-      return;
-    }
-    final account = selectedAccount;
-    if (account == null) {
-      await refresh(loadSelectedMail: true);
-      return;
-    }
-    await loadCachedMails(account);
-  }
-
   void setPage(AppPage next) {
-    if (mode == WorkMode.outlook && next == AppPage.claw) {
-      mode = WorkMode.claw;
-      _clearOutlookSelection();
-      unawaited(refresh());
-    }
     page = next;
     notifyListeners();
+  }
+
+  void setMailFilter(MailFilter next) {
+    if (mailFilter == next) return;
+    mailFilter = next;
+    notifyListeners();
+  }
+
+  /// Mails filtered by the current MailFilter (all / codes).
+  /// Codes filter: mails whose body or subject contains 4-8 consecutive digits.
+  List<MailItem> get filteredMails {
+    if (mailFilter == MailFilter.all) return mails;
+    final re = RegExp(r'\b\d{4,8}\b');
+    return mails.where((m) {
+      final body = m.bodyText;
+      return re.hasMatch(m.subject) || re.hasMatch(body) || re.hasMatch(m.preview);
+    }).toList();
   }
 
   void setMode(WorkMode next) {
     if (mode == next) return;
     mode = next;
-    if (next == WorkMode.claw && page != AppPage.claw) {
-      page = AppPage.dashboard;
+    if (next == WorkMode.claw) {
       _clearOutlookSelection();
-    }
-    if (next == WorkMode.outlook && page == AppPage.claw) {
-      page = AppPage.dashboard;
+    } else {
       selectedClawMailbox = null;
       clawMailboxes = [];
     }
@@ -314,292 +186,16 @@ class AppState extends ChangeNotifier {
     unawaited(refresh());
   }
 
-  void selectClawMailbox(Map<String, dynamic> mailbox) {
-    selectedClawMailbox = mailbox;
-    notifyListeners();
-  }
-
-  String clawMailboxEmail(Map<String, dynamic> mailbox) {
-    return mailbox['email']?.toString() ??
-        mailbox['address']?.toString() ??
-        mailbox['mailbox']?.toString() ??
-        '';
-  }
-
-  void selectMail(MailItem mail) {
-    selectedMail = mail;
-    notifyListeners();
-  }
-
-  Future<void> openCachedMail(MailItem mail) async {
-    selectedMail = mail;
-    page = AppPage.mail;
-    if (mail.accountId == 0 && mail.mailboxEmail.isNotEmpty) {
-      if (mode != WorkMode.claw) mode = WorkMode.claw;
-      if (clawMailboxes.isEmpty) {
-        try {
-          clawMailboxes = await _requireApi().clawMailboxes();
-        } catch (_) {}
-      }
-      for (final mailbox in clawMailboxes) {
-        if (clawMailboxEmail(mailbox) == mail.mailboxEmail) {
-          selectedClawMailbox = mailbox;
-          break;
-        }
-      }
-      notifyListeners();
-      if (selectedClawMailbox == null) return;
-      try {
-        final result = await _requireApi().clawMails(
-          mailbox: mail.mailboxEmail,
-        );
-        mails = result.mails;
-        selectedMail = mails.firstWhere(
-          (item) => item.id == mail.id,
-          orElse: () => mail,
-        );
-        mailSource = result.sourceLabel;
-        mailWarning = result.warning;
-      } catch (ex) {
-        error = ex.toString();
-      }
-      notifyListeners();
-      return;
-    }
-    final account = _accountById(mail.accountId);
-    if (account != null) selectedAccount = account;
-    notifyListeners();
-    if (account == null) return;
-
-    try {
-      final cached = await _requireApi().cachedMails(account.id);
-      mails = cached;
-      selectedMail = cached.firstWhere(
-        (item) => item.id == mail.id,
-        orElse: () => mail,
-      );
-    } catch (ex) {
-      error = ex.toString();
-    }
-    notifyListeners();
-  }
-
-  Future<int> deleteAccounts(List<int> ids) async {
-    if (ids.isEmpty) return 0;
-    final deleted = await _requireApi().batchDeleteAccounts(ids);
-    accounts = accounts.where((item) => !ids.contains(item.id)).toList();
-    if (selectedAccount != null && ids.contains(selectedAccount!.id)) {
-      selectedAccount = accounts.isEmpty ? null : accounts.first;
-      mails = [];
-      selectedMail = null;
-    }
-    stats = await _requireApi().dashboard();
-    lifecycle = text.deletedAccounts(deleted);
-    notifyListeners();
-    return deleted;
-  }
-
-  Future<String> importAccounts(String content) async {
-    error = '';
-    lifecycle = text.importingAccounts;
-    notifyListeners();
-    try {
-      final result = await _requireApi().importAccounts(content);
-      await refresh();
-      final imported = (result['imported'] as num?)?.toInt() ?? 0;
-      final skipped = (result['skipped'] as num?)?.toInt() ?? 0;
-      final errors = (result['errors'] as List? ?? []).length;
-      lifecycle = text.importDone;
-      return text.importResult(imported, skipped, errors);
-    } catch (ex) {
-      error = ex.toString();
-      lifecycle = text.importFailed;
-      notifyListeners();
-      rethrow;
-    }
-  }
-
-  Future<void> deleteAccount(int id) async {
-    await _requireApi().deleteAccount(id);
-    accounts = accounts.where((item) => item.id != id).toList();
-    if (selectedAccount?.id == id) {
-      selectedAccount = accounts.isEmpty ? null : accounts.first;
-      mails = [];
-      selectedMail = null;
-    }
-    stats = await _requireApi().dashboard();
-    lifecycle = text.accountDeleted;
-    notifyListeners();
-  }
-
-  Future<void> setAccountMarker(int id, String color) async {
-    _replaceAccountMarker(id, color);
-    lifecycle = text.markerUpdated;
-    notifyListeners();
-    try {
-      await _requireApi().setAccountMarker(id, color);
-      await refresh();
-    } catch (ex) {
-      final message = ex.toString();
-      await refresh();
-      error = message;
-      lifecycle = text.refreshFailed;
-      notifyListeners();
-    }
-  }
-
-  Future<void> setLanguage(AppLanguage next) async {
-    if (language == next) return;
-    language = next;
-    await _prefs.saveLanguageCode(next.code);
-    lifecycle = text.ready;
-    notifyListeners();
-  }
-
-  Future<void> setSoundEnabled(bool enabled) async {
-    soundEnabled = enabled;
-    await _prefs.saveSoundEnabled(enabled);
-    notifyListeners();
-  }
-
-  Future<void> setSoundTone(String tone) async {
-    soundTone = SoundService.optionOf(tone).value;
-    await _prefs.saveSoundTone(soundTone);
-    notifyListeners();
-  }
-
-  Future<void> previewSound() async {
-    await SoundService.play(soundTone);
-  }
-
-  Future<void> setAutoReceiveEnabled(bool enabled) async {
-    autoReceiveEnabled = enabled;
-    await _prefs.saveAutoReceiveEnabled(enabled);
-    _syncAutoReceiveTimer();
-    notifyListeners();
-  }
-
-  Future<void> setAutoReceiveMinutes(int minutes) async {
-    autoReceiveMinutes = minutes.clamp(1, 60);
-    await _prefs.saveAutoReceiveMinutes(autoReceiveMinutes);
-    _syncAutoReceiveTimer();
-    notifyListeners();
-  }
-
-  void _syncAutoReceiveTimer() {
-    _autoReceiveTimer?.cancel();
-    _autoReceiveTimer = null;
-    if (!autoReceiveEnabled) return;
-    _autoReceiveTimer = Timer.periodic(
-      Duration(minutes: autoReceiveMinutes),
-      (_) => _autoReceiveTick(),
-    );
-  }
-
-  Future<void> _autoReceiveTick() async {
-    if (_autoReceiveRunning || fetching || loading || _api == null) return;
-    _autoReceiveRunning = true;
-    try {
-      if (mode == WorkMode.claw) {
-        await _autoReceiveClaw();
-        return;
-      }
-      await _autoReceiveOutlook();
-    } finally {
-      _autoReceiveRunning = false;
-    }
-  }
-
-  Future<void> _autoReceiveClaw() async {
-    if (mode == WorkMode.claw) {
-      if (selectedClawMailbox == null) {
-        await refresh();
-        if (selectedClawMailbox == null) return;
-      }
-      await fetchSelectedClawMail(openMail: false);
-    }
-  }
-
-  Future<void> _autoReceiveOutlook() async {
-    if (selectedAccount == null) {
-      await refresh();
-    }
-    final target = _nextAutoReceiveTarget();
-    if (target == null) return;
-
-    lifecycle = text.ui('自动接收中');
-    notifyListeners();
-
-    var newCount = 0;
-    var checked = 0;
-    var failed = 0;
-    MailFetchResult? selectedResult;
-
-    try {
-      final result = await _requireApi().fetchMails(target.id);
-      checked += 1;
-      newCount += result.newCount;
-      if (selectedAccount?.id == target.id) {
-        selectedResult = result;
-      }
-    } catch (_) {
-      failed += 1;
-    }
-
-    if (selectedResult != null) {
-      final account = selectedAccount;
-      if (account != null) {
-        final cached = await _requireApi().cachedMails(account.id);
-        mails = cached.isEmpty ? selectedResult.mails : cached;
-      } else {
-        mails = selectedResult.mails;
-      }
-      selectedMail = mails.isEmpty ? null : mails.first;
-      mailSource = selectedResult.sourceLabel;
-      mailWarning = _mailFetchMessage(selectedResult);
-    }
-
+  Future<void> _refreshDashboardSafely() async {
     try {
       stats = await _requireApi().dashboard();
     } catch (_) {}
-
-    if (newCount > 0) {
-      await _playMailSoundIfNeeded(true);
-    }
-    lifecycle = failed == 0
-        ? text.autoReceiveDone(checked, newCount)
-        : text.autoReceivePartial(checked, failed, newCount);
-    notifyListeners();
   }
 
-  MailAccount? _nextAutoReceiveTarget() {
-    final active = accounts
-        .where((account) => account.status.toLowerCase() != 'error')
-        .toList();
-    if (active.isEmpty) return null;
-    final selected = selectedAccount;
-    if (selected != null && selected.status.toLowerCase() != 'error') {
-      return selected;
-    }
-    final target = active[_autoReceiveCursor % active.length];
-    _autoReceiveCursor += 1;
-    return target;
-  }
-
-  Future<void> _playMailSoundIfNeeded(bool hasMail) async {
-    if (!soundEnabled || !hasMail) return;
-    await SoundService.play(soundTone);
-  }
-
-  String _mailFetchMessage(MailFetchResult result) {
-    final parts = <String>[];
-    if (result.newCount > 0) {
-      parts.add(text.ui('已保存 ${result.newCount} 封新邮件。'));
-    }
-    if (result.warning.trim().isNotEmpty) {
-      parts.add(result.warning.trim());
-    }
-    return parts.join('\n');
+  Future<void> _refreshClawStatsSafely() async {
+    try {
+      stats = await _requireApi().clawStats();
+    } catch (_) {}
   }
 
   MailAccount? _resolveSelectedAccount() {
@@ -610,17 +206,6 @@ class AppState extends ChangeNotifier {
       if (account.id == current.id) return account;
     }
     return accounts.first;
-  }
-
-  void _replaceAccountMarker(int id, String color) {
-    accounts = [
-      for (final account in accounts)
-        account.id == id ? account.copyWith(markerColor: color) : account,
-    ];
-    final selected = selectedAccount;
-    if (selected != null && selected.id == id) {
-      selectedAccount = selected.copyWith(markerColor: color);
-    }
   }
 
   Map<String, dynamic>? _resolveSelectedClawMailbox() {
@@ -664,9 +249,13 @@ class AppState extends ChangeNotifier {
     return api;
   }
 
+  void _emit() => notifyListeners();
+
   @override
   void dispose() {
     _autoReceiveTimer?.cancel();
+    _cancelAllOutlookFollowUps();
+    _outlookFetches.clear();
     _api?.close();
     _controller.stop();
     super.dispose();

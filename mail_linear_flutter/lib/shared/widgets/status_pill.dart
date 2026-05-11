@@ -12,6 +12,7 @@ class StatusPill extends StatelessWidget {
     this.icon,
     this.maxWidth,
     this.busy = false,
+    this.solid = false,
   });
 
   final String label;
@@ -19,6 +20,11 @@ class StatusPill extends StatelessWidget {
   final IconData? icon;
   final double? maxWidth;
   final bool busy;
+
+  /// When `true`, pill renders with a tinted background (strong signal).
+  /// Default `false` — soft pill with transparent bg + neutral border +
+  /// colored dot + muted text. Reserve `solid` for error/warning/busy.
+  final bool solid;
 
   @override
   Widget build(BuildContext context) {
@@ -28,9 +34,11 @@ class StatusPill extends StatelessWidget {
       height: 34,
       padding: const EdgeInsets.symmetric(horizontal: 12),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: .1),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: color.withValues(alpha: .22)),
+        color: solid ? color.withValues(alpha: .1) : Colors.transparent,
+        borderRadius: BorderRadius.circular(AppRadii.xs),
+        border: Border.all(
+          color: solid ? color.withValues(alpha: .22) : LinearColors.line,
+        ),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -54,7 +62,9 @@ class StatusPill extends StatelessWidget {
                 key: ValueKey(label),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: AppText.label.copyWith(color: color),
+                style: AppText.label.copyWith(
+                  color: solid ? color : LinearColors.muted,
+                ),
               ),
             ),
           ),

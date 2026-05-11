@@ -19,7 +19,7 @@ class MetricCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.all(22),
-      decoration: AppSurfaces.panel(radius: 22),
+      decoration: AppSurfaces.panel(),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

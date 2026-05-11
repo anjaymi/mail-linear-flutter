@@ -36,7 +36,7 @@ class AccountRow extends StatelessWidget {
     return MotionTapSurface(
       lift: false,
       child: InkWell(
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(AppRadii.sm),
         onTap: onTap,
         child: AnimatedContainer(
           duration: MotionTokens.duration(context, MotionTokens.normal),
@@ -48,7 +48,7 @@ class AccountRow extends StatelessWidget {
             color: active
                 ? LinearColors.blue.withValues(alpha: .09)
                 : Colors.transparent,
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(AppRadii.sm),
             border: Border.all(
               color: active
                   ? LinearColors.blue.withValues(alpha: .24)
@@ -76,12 +76,7 @@ class AccountRow extends StatelessWidget {
               ),
               SizedBox(
                 width: 82,
-                child: StatusPill(
-                  label: state.text.ui(account.isError ? '异常' : '可用'),
-                  color: account.isError
-                      ? LinearColors.red
-                      : LinearColors.green,
-                ),
+                child: _AccountStatusPill(state: state, account: account),
               ),
               SizedBox(
                 width: 142,
@@ -125,6 +120,31 @@ class AccountRow extends StatelessWidget {
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(SnackBar(content: Text(state.text.ui('邮箱地址已复制'))));
+  }
+}
+
+class _AccountStatusPill extends StatelessWidget {
+  const _AccountStatusPill({required this.state, required this.account});
+  final AppState state;
+  final MailAccount account;
+
+  @override
+  Widget build(BuildContext context) {
+    if (state.checkingAccounts && account.isError) {
+      return StatusPill(
+        label: state.text.ui('复检中'),
+        color: LinearColors.blue,
+        solid: true,
+      );
+    }
+    if (account.isError) {
+      return StatusPill(
+        label: state.text.ui('异常'),
+        color: LinearColors.red,
+        solid: true,
+      );
+    }
+    return StatusPill(label: state.text.ui('可用'), color: LinearColors.green);
   }
 }
 

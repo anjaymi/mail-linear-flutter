@@ -191,10 +191,14 @@ class _StatusBox extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: active ? const Color(0xffeff6ff) : LinearColors.surfaceSoft,
-        borderRadius: BorderRadius.circular(16),
+        color: active
+            ? LinearColors.blue.withValues(alpha: .08)
+            : LinearColors.surfaceSoft,
+        borderRadius: BorderRadius.circular(AppRadii.sm),
         border: Border.all(
-          color: active ? const Color(0xffbfdbfe) : LinearColors.line,
+          color: active
+              ? LinearColors.blue.withValues(alpha: .22)
+              : LinearColors.line,
         ),
       ),
       child: Row(

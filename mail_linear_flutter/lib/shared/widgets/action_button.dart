@@ -48,7 +48,7 @@ class LinearButton extends StatelessWidget {
           minimumSize: const Size(48, 46),
           padding: const EdgeInsets.symmetric(horizontal: 18),
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(14),
+            borderRadius: BorderRadius.circular(AppRadii.sm),
             side: BorderSide(
               color: primary ? Colors.transparent : LinearColors.line,
             ),

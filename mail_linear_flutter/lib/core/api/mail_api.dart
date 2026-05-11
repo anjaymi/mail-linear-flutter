@@ -5,6 +5,8 @@ import '../models/dashboard_stats.dart';
 import '../models/mail_account.dart';
 import '../models/mail_item.dart';
 
+part 'mail_fetch_result.dart';
+
 class MailApi {
   MailApi(this.baseUrl);
 
@@ -61,8 +63,10 @@ class MailApi {
       mails: mails,
       protocol: data['protocol']?.toString() ?? 'outlook',
       cached: data['cached'] == true,
-      warning: data['warning']?.toString() ?? '',
+      partialCached: data['partialCached'] == true,
+      warning: _combinedWarning([data['warning'], data['graphWarning']]),
       newCount: (data['savedCount'] as num?)?.toInt() ?? 0,
+      trace: _mapOf(data['trace']),
     );
   }
 
@@ -70,6 +74,10 @@ class MailApi {
     if (ids.isEmpty) return 0;
     final data = await _post('/api/accounts/batch-delete', {'ids': ids});
     return (data['deleted'] as num?)?.toInt() ?? 0;
+  }
+
+  Future<Map<String, dynamic>> checkAccounts(List<int> ids) {
+    return _post('/api/accounts/check', {'ids': ids, 'limit': ids.length});
   }
 
   Future<Map<String, dynamic>> importAccounts(String content) {
@@ -149,9 +157,29 @@ class MailApi {
       mails: mails,
       protocol: sync ? 'claw' : 'claw-cache',
       cached: !sync,
-      warning: syncInfo['message']?.toString() ?? '',
+      partialCached: false,
+      warning: _combinedWarning([syncInfo['message']]),
       newCount: (syncInfo['savedCount'] as num?)?.toInt() ?? 0,
+      trace: syncInfo,
     );
+  }
+
+  Map<String, dynamic> _mapOf(Object? value) {
+    return value is Map ? Map<String, dynamic>.from(value) : {};
+  }
+
+  String _combinedWarning(Iterable<Object?> values) {
+    final parts = <String>[];
+    final seen = <String>{};
+    for (final value in values) {
+      final message = value?.toString() ?? '';
+      for (final line in message.split('\n')) {
+        final trimmed = line.trim();
+        if (trimmed.isEmpty || !seen.add(trimmed)) continue;
+        parts.add(trimmed);
+      }
+    }
+    return parts.join('\n');
   }
 
   Future<void> clawSendCode(String email) async {
@@ -211,33 +239,5 @@ class MailApi {
     }
     final data = envelope['data'];
     return data is Map<String, dynamic> ? data : {'value': data};
-  }
-}
-
-class MailApiException implements Exception {
-  const MailApiException(this.message);
-  final String message;
-  @override
-  String toString() => message;
-}
-
-class MailFetchResult {
-  const MailFetchResult({
-    required this.mails,
-    required this.protocol,
-    required this.cached,
-    required this.warning,
-    required this.newCount,
-  });
-
-  final List<MailItem> mails;
-  final String protocol;
-  final bool cached;
-  final String warning;
-  final int newCount;
-
-  String get sourceLabel {
-    final source = protocol.toUpperCase();
-    return cached ? '$source 缓存' : '$source 实时';
   }
 }

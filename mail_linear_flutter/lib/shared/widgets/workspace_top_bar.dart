@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../../app/app_state.dart';
 import '../../core/theme/app_theme.dart';
-import 'workspace_top_bar_controls.dart';
 
+/// ProMail-style top bar: just a centered search field spanning the width.
 class WorkspaceTopBar extends StatelessWidget {
   const WorkspaceTopBar({super.key, required this.state});
 
@@ -11,95 +11,54 @@ class WorkspaceTopBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final width = constraints.maxWidth;
-        final isTight = width < 540;
-        final showLifecycle = width >= 700;
-        final showMode = width >= 820;
-        final showServer = width >= 1040;
-
-        return SizedBox(
-          height: 66,
-          child: Row(
-            children: [
-              if (!isTight) ...[
-                WorkspacePageGlyph(icon: _pageIcon(state.page)),
-                const SizedBox(width: 14),
-              ],
-              Expanded(child: _TitleBlock(state: state)),
-              const SizedBox(width: 12),
-              Flexible(
-                flex: isTight ? 0 : 1,
-                child: WorkspaceHeaderTools(
-                  children: [
-                    WorkspaceTopAction(state: state),
-                    if (showLifecycle) TopBarStatusItems.lifecycle(state),
-                    if (showMode) WorkspaceModeSwitch(state: state),
-                    if (showServer)
-                      TopBarStatusItems.server(_serverLabel(state.serverUrl)),
-                  ],
+    return Container(
+      height: 48,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      decoration: const BoxDecoration(
+        color: LinearColors.surface,
+        border: Border(
+          bottom: BorderSide(color: LinearColors.line, width: 0.5),
+        ),
+      ),
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 560),
+          child: SizedBox(
+            height: 34,
+            child: TextField(
+              style: AppText.body,
+              decoration: InputDecoration(
+                isDense: true,
+                prefixIcon: const Icon(Icons.search, size: 18),
+                prefixIconConstraints: const BoxConstraints(
+                  minWidth: 36,
+                  minHeight: 34,
+                ),
+                hintText: state.text.ui('搜索邮件…'),
+                hintStyle: AppText.muted.copyWith(fontSize: 13),
+                contentPadding: const EdgeInsets.symmetric(vertical: 8),
+                filled: true,
+                fillColor: LinearColors.surfaceSoft,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(AppRadii.sm),
+                  borderSide: BorderSide.none,
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(AppRadii.sm),
+                  borderSide: BorderSide.none,
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(AppRadii.sm),
+                  borderSide: const BorderSide(
+                    color: LinearColors.blue,
+                    width: 1.2,
+                  ),
                 ),
               ),
-            ],
+            ),
           ),
-        );
-      },
+        ),
+      ),
     );
   }
-
-  IconData _pageIcon(AppPage page) => switch (page) {
-    AppPage.dashboard => Icons.space_dashboard_outlined,
-    AppPage.accounts => Icons.alternate_email,
-    AppPage.mail => Icons.mail_outline,
-    AppPage.claw => Icons.hub_outlined,
-    AppPage.settings => Icons.tune,
-  };
-
-  String _serverLabel(String url) =>
-      url.replaceFirst('http://', '').replaceFirst('https://', '');
-}
-
-class _TitleBlock extends StatelessWidget {
-  const _TitleBlock({required this.state});
-  final AppState state;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      mainAxisAlignment: MainAxisAlignment.center,
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          _title,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: Theme.of(context).textTheme.headlineMedium,
-        ),
-        const SizedBox(height: 3),
-        Text(
-          _subtitle,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: AppText.muted,
-        ),
-      ],
-    );
-  }
-
-  String get _title => switch (state.page) {
-    AppPage.dashboard => state.text.dashboard,
-    AppPage.accounts => state.text.accounts,
-    AppPage.mail => state.text.mail,
-    AppPage.claw => state.text.clawSettings,
-    AppPage.settings => state.text.settings,
-  };
-
-  String get _subtitle => switch (state.page) {
-    AppPage.dashboard => state.text.dashboardSubtitle,
-    AppPage.accounts => state.text.accountsSubtitle,
-    AppPage.mail => state.text.mailSubtitle,
-    AppPage.claw => state.text.clawSubtitle,
-    AppPage.settings => state.text.settingsSubtitle,
-  };
 }
