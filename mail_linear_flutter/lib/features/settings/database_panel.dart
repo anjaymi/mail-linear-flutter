@@ -29,9 +29,8 @@ class _DatabasePanelState extends State<DatabasePanel> {
   Widget build(BuildContext context) {
     final cache = health?['outlookCache'];
     final issues = cache is Map ? Map<String, dynamic>.from(cache) : null;
-    return Container(
-      padding: const EdgeInsets.all(24),
-      decoration: AppSurfaces.panel(),
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(24, 16, 24, 24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -167,7 +166,16 @@ class _MetricLine extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: 10),
       child: Row(
         children: [
-          SizedBox(width: 72, child: Text(label, style: AppText.muted)),
+          ConstrainedBox(
+            constraints: const BoxConstraints(minWidth: 72, maxWidth: 108),
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: AppText.muted,
+            ),
+          ),
+          const SizedBox(width: 8),
           Expanded(
             child: Text(
               value,

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../app/app_state.dart';
+import '../../core/motion/motion_tokens.dart';
 import '../../core/theme/app_theme.dart';
 
 class MarkerOption {
@@ -89,28 +90,40 @@ class MarkerLabel extends StatelessWidget {
   Widget build(BuildContext context) {
     final option = markerOptionOf(value);
     if (option == null) {
-      return Text(state.text.ui('未标记'), style: AppText.caption);
+      return AnimatedSwitcher(
+        duration: MotionTokens.duration(context, MotionTokens.normal),
+        child: Text(
+          state.text.ui('未标记'),
+          key: const ValueKey('marker-empty'),
+          style: AppText.caption,
+        ),
+      );
     }
-    return Row(
-      children: [
-        Container(
-          width: 8,
-          height: 8,
-          decoration: BoxDecoration(
-            color: option.color,
-            shape: BoxShape.circle,
+    return AnimatedSwitcher(
+      duration: MotionTokens.duration(context, MotionTokens.normal),
+      child: Row(
+        key: ValueKey(option.value),
+        children: [
+          AnimatedContainer(
+            duration: MotionTokens.duration(context, MotionTokens.normal),
+            width: 8,
+            height: 8,
+            decoration: BoxDecoration(
+              color: option.color,
+              shape: BoxShape.circle,
+            ),
           ),
-        ),
-        const SizedBox(width: 8),
-        Expanded(
-          child: Text(
-            state.text.colorLabel(option.label),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: AppText.bodyStrong,
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              state.text.colorLabel(option.label),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: AppText.bodyStrong,
+            ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }
@@ -204,23 +217,29 @@ class _Swatch extends StatelessWidget {
       child: InkWell(
         borderRadius: BorderRadius.circular(999),
         onTap: onTap,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 140),
-          width: size,
-          height: size,
-          decoration: BoxDecoration(
-            color: option.color.withValues(alpha: selected ? 1 : .16),
-            shape: BoxShape.circle,
-            border: Border.all(
-              color: selected
-                  ? option.color
-                  : option.color.withValues(alpha: .3),
-              width: selected ? 2.4 : 1,
+        child: AnimatedScale(
+          scale: selected ? 1.04 : 1,
+          duration: MotionTokens.duration(context, MotionTokens.fast),
+          curve: MotionTokens.easeOut,
+          child: AnimatedContainer(
+            duration: MotionTokens.duration(context, MotionTokens.fast),
+            curve: MotionTokens.easeOut,
+            width: size,
+            height: size,
+            decoration: BoxDecoration(
+              color: option.color.withValues(alpha: selected ? 1 : .16),
+              shape: BoxShape.circle,
+              border: Border.all(
+                color: selected
+                    ? option.color
+                    : option.color.withValues(alpha: .3),
+                width: selected ? 2.4 : 1,
+              ),
             ),
+            child: selected
+                ? const Icon(Icons.check, size: 16, color: Colors.white)
+                : null,
           ),
-          child: selected
-              ? const Icon(Icons.check, size: 16, color: Colors.white)
-              : null,
         ),
       ),
     );

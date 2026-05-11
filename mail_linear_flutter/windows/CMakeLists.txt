@@ -71,6 +71,17 @@ endif()
 
 set(INSTALL_BUNDLE_DATA_DIR "${CMAKE_INSTALL_PREFIX}/data")
 set(INSTALL_BUNDLE_LIB_DIR "${CMAKE_INSTALL_PREFIX}")
+set(INSTALL_BUNDLE_NATIVE_DIR "${CMAKE_INSTALL_PREFIX}/runtime/native")
+
+set(NATIVE_MAIL_API_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../../native-mail-api")
+set(NATIVE_MAIL_API_EXE "${NATIVE_MAIL_API_DIR}/target/release/outlook-mail-native.exe")
+add_custom_target(native_mail_api_release
+  COMMAND cargo build --release
+  WORKING_DIRECTORY "${NATIVE_MAIL_API_DIR}"
+  COMMENT "Building native mail API sidecar"
+  VERBATIM
+)
+add_dependencies(${BINARY_NAME} native_mail_api_release)
 
 install(TARGETS ${BINARY_NAME} RUNTIME DESTINATION "${CMAKE_INSTALL_PREFIX}"
   COMPONENT Runtime)
@@ -86,6 +97,10 @@ if(PLUGIN_BUNDLED_LIBRARIES)
     DESTINATION "${INSTALL_BUNDLE_LIB_DIR}"
     COMPONENT Runtime)
 endif()
+
+install(FILES "${NATIVE_MAIL_API_EXE}"
+  DESTINATION "${INSTALL_BUNDLE_NATIVE_DIR}"
+  COMPONENT Runtime)
 
 # Copy the native assets provided by the build.dart from all packages.
 set(NATIVE_ASSETS_DIR "${PROJECT_BUILD_DIR}native_assets/windows/")

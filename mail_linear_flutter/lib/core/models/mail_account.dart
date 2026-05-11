@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../theme/app_theme.dart';
+
 class MailAccount {
   const MailAccount({
     required this.id,
@@ -33,9 +35,25 @@ class MailAccount {
 
   bool get isError => status.toLowerCase() == 'error';
 
+  MailAccount copyWith({
+    String? markerColor,
+    String? status,
+    String? lastSyncedAt,
+  }) {
+    return MailAccount(
+      id: id,
+      email: email,
+      status: status ?? this.status,
+      clientId: clientId,
+      refreshToken: refreshToken,
+      markerColor: markerColor ?? this.markerColor,
+      lastSyncedAt: lastSyncedAt ?? this.lastSyncedAt,
+    );
+  }
+
   Color get color {
     final raw = markerColor.replaceFirst('#', '');
-    if (raw.length != 6) return const Color(0xff94a3b8);
+    if (raw.length != 6) return LinearColors.faint;
     return Color(int.parse('ff$raw', radix: 16));
   }
 }

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../core/motion/motion_tokens.dart';
 import '../../core/theme/app_theme.dart';
 
 class MetricCard extends StatelessWidget {
@@ -18,11 +19,32 @@ class MetricCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.all(22),
-      decoration: AppSurfaces.panel(radius: 22),
+      decoration: AppSurfaces.panel(),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(value, style: Theme.of(context).textTheme.headlineLarge),
+          AnimatedSwitcher(
+            duration: MotionTokens.duration(context, MotionTokens.page),
+            switchInCurve: MotionTokens.easeOutStrong,
+            switchOutCurve: MotionTokens.easeOut,
+            transitionBuilder: (child, animation) {
+              return FadeTransition(
+                opacity: animation,
+                child: SlideTransition(
+                  position: Tween<Offset>(
+                    begin: const Offset(0, .08),
+                    end: Offset.zero,
+                  ).animate(animation),
+                  child: child,
+                ),
+              );
+            },
+            child: Text(
+              value,
+              key: ValueKey(value),
+              style: Theme.of(context).textTheme.headlineLarge,
+            ),
+          ),
           const SizedBox(height: 8),
           Text(
             label,

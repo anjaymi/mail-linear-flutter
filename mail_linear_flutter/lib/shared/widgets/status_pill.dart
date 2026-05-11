@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
+import '../../core/motion/motion_tokens.dart';
 import '../../core/theme/app_theme.dart';
+import 'motion_widgets.dart';
 
 class StatusPill extends StatelessWidget {
   const StatusPill({
@@ -9,34 +11,61 @@ class StatusPill extends StatelessWidget {
     this.color = LinearColors.green,
     this.icon,
     this.maxWidth,
+    this.busy = false,
+    this.solid = false,
   });
 
   final String label;
   final Color color;
   final IconData? icon;
   final double? maxWidth;
+  final bool busy;
+
+  /// When `true`, pill renders with a tinted background (strong signal).
+  /// Default `false` — soft pill with transparent bg + neutral border +
+  /// colored dot + muted text. Reserve `solid` for error/warning/busy.
+  final bool solid;
 
   @override
   Widget build(BuildContext context) {
-    final content = Container(
+    final content = AnimatedContainer(
+      duration: MotionTokens.duration(context, MotionTokens.normal),
+      curve: MotionTokens.easeOut,
       height: 34,
       padding: const EdgeInsets.symmetric(horizontal: 12),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: .1),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: color.withValues(alpha: .22)),
+        color: solid ? color.withValues(alpha: .1) : Colors.transparent,
+        borderRadius: BorderRadius.circular(AppRadii.xs),
+        border: Border.all(
+          color: solid ? color.withValues(alpha: .22) : LinearColors.line,
+        ),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon ?? Icons.circle, size: icon == null ? 8 : 16, color: color),
+          icon == null
+              ? Icon(Icons.circle, size: 8, color: color)
+              : MotionSyncIcon(
+                  icon: icon!,
+                  active: busy,
+                  size: 16,
+                  color: color,
+                ),
           const SizedBox(width: 8),
           Flexible(
-            child: Text(
-              label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: AppText.label.copyWith(color: color),
+            child: AnimatedSwitcher(
+              duration: MotionTokens.duration(context, MotionTokens.normal),
+              switchInCurve: MotionTokens.easeOut,
+              switchOutCurve: Curves.easeIn,
+              child: Text(
+                label,
+                key: ValueKey(label),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppText.label.copyWith(
+                  color: solid ? color : LinearColors.muted,
+                ),
+              ),
             ),
           ),
         ],

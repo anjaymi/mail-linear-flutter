@@ -58,9 +58,9 @@ class _WindowButton extends StatelessWidget {
       padding: const EdgeInsets.only(left: 2, right: 6),
       child: Material(
         color: Colors.transparent,
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(AppRadii.sm),
         child: InkWell(
-          borderRadius: BorderRadius.circular(10),
+          borderRadius: BorderRadius.circular(AppRadii.sm),
           hoverColor: (danger ? LinearColors.red : LinearColors.blue)
               .withValues(alpha: .10),
           onTap: onPressed,

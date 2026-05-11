@@ -16,28 +16,18 @@ class LinearShell extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [Color(0xffedf5ff), LinearColors.chrome, Color(0xfff4f1ff)],
-          ),
-        ),
+        color: LinearColors.surface,
         child: Stack(
           children: [
             Row(
               children: [
                 WorkspaceSidebar(state: state),
                 Expanded(
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(26, 20, 26, 22),
-                    child: Column(
-                      children: [
-                        WorkspaceTopBar(state: state),
-                        const SizedBox(height: 14),
-                        Expanded(child: child),
-                      ],
-                    ),
+                  child: Column(
+                    children: [
+                      WorkspaceTopBar(state: state),
+                      Expanded(child: child),
+                    ],
                   ),
                 ),
               ],

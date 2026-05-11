@@ -44,6 +44,19 @@ class AppPreferences {
     return data['languageCode']?.toString() ?? 'zh-Hans';
   }
 
+  Future<String> loadAccentColor() async {
+    final data = await _read();
+    return data['accentColor']?.toString() ?? '';
+  }
+
+  Future<void> saveAccentColor(String hex) async {
+    final data = await _read()
+      ..['accentColor'] = hex;
+    final file = _file();
+    await file.parent.create(recursive: true);
+    await file.writeAsString(jsonEncode(data));
+  }
+
   Future<void> saveSoundEnabled(bool enabled) async {
     final data = await _read()
       ..['soundEnabled'] = enabled;
